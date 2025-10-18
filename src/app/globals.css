@@ -1,0 +1,184 @@
+:root { --bg: #0b1220; --card: #121a2b; --text: #ecf2ff; --muted: #a3b0d3; --brand: #e11d48; --accent: #22c55e; }
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;color:var(--text);background-color:var(--bg);background:url('/santasworkshop.png') center/cover no-repeat fixed;filter:brightness(1.15) saturate(1.2)}
+.container{max-width:1000px;margin:0 auto;padding:16px}
+.site-header{background:rgba(14,22,40,.45);border-bottom:1px solid rgba(31,42,68,.55);backdrop-filter:blur(6px)}
+.site-header.translucent{background:rgba(14,22,40,.55);backdrop-filter:saturate(1.05) blur(4px)}
+.site-header.translucent .container{border-color:transparent}
+.site-header .brand{margin:0}
+.site-header nav{display:flex;gap:14px}
+.site-header a{color:#c7d2fe;text-decoration:none}
+.nav-holiday a{position:relative;cursor:pointer}
+.nav-holiday a:hover,.nav-holiday a:focus-visible{cursor:url('/images/holly-cursor.png') 4 4, pointer}
+.nav-holiday a::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:3px;border-radius:3px;opacity:0;transform:translateY(2px);background:repeating-linear-gradient(45deg,#e11d48 0 6px,#fff 6px 12px);background-size:24px 3px}
+.nav-holiday a:hover::after,.nav-holiday a:focus-visible::after{opacity:1;transform:translateY(0);animation:unwrap-slide 1.2s linear infinite}
+.nav-holiday a .flake{position:absolute;left:50%;bottom:100%;font-size:10px;opacity:0;transform:translate(-50%,0) scale(.9)}
+.nav-holiday a:hover .flake,.nav-holiday a:focus-visible .flake{content:"❄";opacity:1;animation:flake-drift 900ms ease-out forwards}
+.brand-row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.brand-link{display:flex;gap:10px;align-items:center;color:inherit;text-decoration:none}
+.brand-sparkle{position:relative}
+.brand-sparkle .sparkle,.brand-sparkle .flake{position:absolute;pointer-events:none;opacity:0}
+.brand-sparkle .sparkle{width:6px;height:6px;border-radius:50%;background:radial-gradient(circle,#fff,#fff0);filter:drop-shadow(0 0 6px rgba(255,255,255,.8))}
+.brand-sparkle:hover .sparkle.s1{left:-6px;top:-6px;animation:sparkle-pop 900ms ease-out forwards}
+.brand-sparkle:hover .sparkle.s2{right:-6px;top:-4px;animation:sparkle-pop 1100ms ease-out forwards 120ms}
+.brand-sparkle:hover .flake.f1{right:6px;top:-8px;content:"❄";animation:flake-drift 1000ms ease-out forwards}
+.brand-extra{display:flex;align-items:center}
+/* Candy cane countdown */
+.candycane-wrap{display:flex;align-items:center;gap:8px}
+.candycane-text{font-size:12px;color:#e5e7eb;opacity:.9}
+.candycane-bar{position:relative;width:180px;height:12px;border-radius:999px;overflow:hidden;background:rgba(14,22,40,.35);border:1px solid rgba(31,42,68,.55)}
+.candycane-fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:repeating-linear-gradient(45deg,#e11d48 0 8px,#fff 8px 16px);background-size:24px 12px;animation:barberpole-scroll 8s linear infinite}
+
+@keyframes sparkle-pop{0%{opacity:0;transform:scale(.4)}50%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.7)}}
+@keyframes flake-drift{0%{opacity:0;transform:translateY(0) scale(.9)}70%{opacity:1}100%{opacity:0;transform:translateY(-10px) scale(.9)}}
+@keyframes unwrap-slide{0%{background-position:0 0}100%{background-position:24px 0}}
+@keyframes barberpole-scroll{0%{background-position:0 0}100%{background-position:48px 0}}
+
+@media (prefers-reduced-motion: reduce){
+	.nav-holiday a:hover::after,.nav-holiday a:focus-visible::after{animation:none}
+	.nav-holiday a:hover .flake,.nav-holiday a:focus-visible .flake{animation:none;opacity:0}
+	.brand-sparkle:hover .sparkle.s1,.brand-sparkle:hover .sparkle.s2,.brand-sparkle:hover .flake.f1{animation:none;opacity:0}
+	.candycane-fill{animation:none}
+}
+.site-footer{opacity:.7;text-align:center;padding:24px}
+.card{background:rgba(18,26,43,.40);padding:16px;border:1px solid rgba(31,42,68,.55);border-radius:16px;margin:16px 0;backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.santa-page .card{background:rgba(18,26,43,.40);border-color:rgba(31,42,68,.55)}
+.btn{background:var(--brand);color:white;border:none;padding:10px 14px;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.secondary{background:rgba(51,65,85,.8)}
+.link{color:#93c5fd}
+.form{display:flex;flex-direction:column;gap:12px}
+label{display:flex;flex-direction:column;gap:6px}
+input,select,textarea{padding:10px;border-radius:10px;border:1px solid rgba(51,65,85,.65);background:rgba(14,22,40,.35);color:var(--text);backdrop-filter:blur(6px);font-family:inherit;caret-color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.row{display:flex;gap:12px;align-items:center}
+.row.between{justify-content:space-between}
+.list{list-style:none;padding:0;margin:0}
+.list-item{display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px solid #23314f}
+.badge{padding:4px 8px;border-radius:999px;background:#334155}
+.badge.retailer{font-size:12px; text-transform:uppercase; letter-spacing:.3px; opacity:.95}
+.badge.retailer.amazon{background:#232f3e}
+.badge.retailer.walmart{background:#0071dc}
+.badge.retailer.ai{background:#4b5563}
+
+/* Santa reading indicator */
+.santa-reading{display:flex;gap:6px;align-items:center;color:#e5e7eb;opacity:.9;min-height:20px}
+.santa-reading .dot{width:6px;height:6px;border-radius:50%;background:#e5e7eb;opacity:.85;animation:santa-bounce 1.2s infinite ease-in-out}
+.santa-reading .dot.d2{animation-delay:.15s}
+.santa-reading .dot.d3{animation-delay:.3s}
+@keyframes santa-bounce{0%,80%,100%{transform:scale(0)}40%{transform:scale(1)}}
+
+@media (prefers-reduced-motion: reduce){
+	.santa-reading .dot{animation:none}
+}
+
+/* Responsive grids */
+.grid3{display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px}
+@media (max-width: 900px){
+	.grid3{grid-template-columns:repeat(2, minmax(0,1fr))}
+}
+@media (max-width: 640px){
+	.grid3{grid-template-columns:1fr}
+	.grid2{grid-template-columns:1fr}
+}
+.badge.approved{background:var(--accent); color:#0b1220; font-weight:700}
+.badge.rejected{background:#ef4444}
+.meter-text{margin-top:8px;font-size:14px;color:var(--muted)}
+.card.item{padding:12px}
+.item-top{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.chips{display:flex;gap:8px;margin-top:8px}
+.chip{background:#0e1628;border:1px solid #334155;color:#e5e7eb;padding:8px 12px;border-radius:999px;cursor:pointer;min-height:36px}
+.chip.active{border-color:var(--accent)}
+.chip.ghost{background:transparent;border-color:#334155;color:#e5e7eb}
+.chip:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}
+.chip[disabled]{opacity:.6;cursor:not-allowed}
+.error{color:#fca5a5}
+
+/* Skeletons */
+.skeleton{position:relative;overflow:hidden;background:rgba(255,255,255,.06);border-radius:10px}
+.skeleton::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);animation:shimmer 1.4s infinite}
+@keyframes shimmer{100%{transform:translateX(100%)}}
+
+/* North Pole counter */
+.northpole{position:relative;display:flex;align-items:flex-end;gap:10px}
+.northpole.compact .sign{transform:scale(.9)}
+.northpole .pole{width:14px;height:64px;border-radius:8px;position:relative;background:repeating-linear-gradient(135deg,var(--brand) 0 10px,#ffffff 10px 20px);box-shadow:inset 0 0 0 1px #1f2a44}
+.northpole .finial{position:absolute;top:-12px;left:50%;transform:translateX(-50%);width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #ffd166, #f59e0b);box-shadow:0 2px 0 #1f2a44}
+.northpole .sign{position:relative;min-width:220px;max-width:360px;background:linear-gradient(180deg,#6b4f2c,#4e3820);color:#fff;border-radius:10px;padding:10px 14px;border:1px solid #3b2a17;box-shadow:0 6px 14px rgba(0,0,0,.25)}
+.northpole .sign:before{content:"";position:absolute;left:-8px;top:14px;width:16px;height:6px;background:#3b2a17;border-radius:3px}
+.northpole .snowcap{position:absolute;left:8px;right:8px;top:-8px;height:14px;background:linear-gradient(180deg,#fff,#e5e7eb);border-radius:8px 8px 4px 4px;box-shadow:0 2px 0 rgba(0,0,0,.15)}
+.northpole .sign-text{font-weight:700;letter-spacing:.2px}
+
+@media (max-width: 520px){
+	.northpole .sign{min-width:unset;max-width:80vw}
+	.northpole .sign-text{font-size:14px}
+}
+
+/* Elf guide bubble */
+.elf-guide{display:flex;gap:12px;align-items:center;margin:8px 0}
+.elf-img{filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+.elf-bubble{background:rgba(14,22,40,.4);border:1px solid rgba(51,65,85,.6);color:#e5e7eb;border-radius:12px;padding:10px 12px;max-width:520px;backdrop-filter:blur(6px)}
+.muted{color:var(--muted)}
+
+/* Home hero styles */
+.hero{position:relative;margin:16px 0}
+.hero-illustration{position:absolute;inset:0;border-radius:16px;overflow:hidden;filter:contrast(1.05) saturate(1.05)}
+.hero-card{position:relative;backdrop-filter:saturate(1.1) blur(2px)}
+.hero-title{margin:0 0 6px 0;font-size:28px}
+.hero-sub{margin:0 0 10px 0;color:var(--muted)}
+.hero .cta-row{display:flex;gap:12px;margin-top:10px}
+.hero-counter{margin:10px 0}
+.hero-elf{position:absolute;right:24px;bottom:-8px;pointer-events:none;opacity:.95}
+@media (max-width: 900px){.hero-elf{right:8px;bottom:-10px;transform:scale(.9)}}
+@media (max-width: 700px){.hero-elf{display:none}}
+
+/* Snowfall */
+.snow-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.snowflake{position:absolute;top:-10%;font-size:14px;animation:fall linear infinite;}
+@keyframes fall { to { transform: translateY(120vh) rotate(360deg); } }
+
+@media (prefers-reduced-motion: no-preference){
+	.northpole .sign{animation:sway 6s ease-in-out infinite}
+	@keyframes sway{0%,100%{transform:rotate(-1.2deg)}50%{transform:rotate(1.2deg)}}
+}
+
+.santa-bg{position:relative;min-height:calc(100vh - 160px); /* account for header/footer */ isolation:isolate}
+.santa-bg:before{content:none}
+.santa-bg:after{content:none}
+.santa-bg > *{position:relative;z-index:1}
+.santa-page{display:block;padding:12px 0}
+.santa-bg .card{background:rgba(14,22,40,.56);border-color:rgba(51,65,85,.6);backdrop-filter:saturate(1.1) blur(6px)}
+.santa-bg .grid2 .card{background:rgba(14,22,40,.62)}
+/* Inputs/selects glass */
+.santa-bg input,.santa-bg select,.santa-bg textarea{background:rgba(14,22,40,.44);border-color:rgba(51,65,85,.65);color:var(--text)}
+.santa-bg textarea::placeholder{color:var(--muted);opacity:.95}
+/* Elf bubble glass */
+.santa-bg .elf-bubble{background:rgba(14,22,40,.5);border-color:rgba(51,65,85,.6)}
+/* Meter styles removed (GoodnessMeter deprecated). meter-text remains for parent summary labels */
+/* Buttons still pop but are slightly translucent */
+.santa-bg .btn{background:#e11d48cc}
+.santa-bg .btn.secondary{background:#334155cc}
+
+/* Pill tabs for Santa Note */
+.pill-tabs{display:flex;gap:8px;margin:8px 0 12px}
+.pill-btn{appearance:none;background:#0e1628;border:1px solid #334155;color:#e5e7eb;padding:10px 14px;border-radius:999px;cursor:pointer;min-height:40px}
+.pill-btn.active{background:#1f2a44;border-color:#60a5fa;box-shadow:0 0 0 2px rgba(96,165,250,.25) inset}
+.pill-btn:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}
+/* Ensure consistent vertical rhythm in the note card */
+.santa-bg .card label + .row{margin-top:10px}
+.santa-bg .card .badge{margin-left:6px}
+
+/* Chat bubble styles */
+.santa-chat{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:flex-start;margin:8px 0 12px}
+.santa-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#0e1628;border:1px solid #334155;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.santa-bubble{position:relative;background:rgba(14,22,40,.44);border:1px solid #334155;border-radius:12px;padding:10px 12px}
+.santa-bubble::after{content:"";position:absolute;left:-6px;top:14px;border-width:6px;border-style:solid;border-color:transparent #334155 transparent transparent}
+.santa-bubble::before{content:"";position:absolute;left:-5px;top:14px;border-width:6px;border-style:solid;border-color:transparent rgba(14,22,40,.44) transparent transparent}
+.bubble-text{margin:0}
+.bubble-text.clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-clamp:2}
+.bubble-meta{margin-top:6px;color:var(--muted);font-size:12px}
+.chat-controls{display:flex;gap:8px;align-items:center}
+.history-panel{margin-top:6px;background:rgba(14,22,40,.36);border:1px solid #2b3a59;border-radius:10px;padding:8px}
+/* Baseline focus ring for interactive elements */
+button:focus-visible, a:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
