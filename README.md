@@ -1,3 +1,59 @@
+## Parent PIN + Role-based Access
+
+This app restricts the Parent Dashboard to users with the `role=parent` custom claim. A Firebase Callable Function verifies a Parent PIN and sets the custom claim. Firestore Security Rules enforce parent-only writes.
+
+### Setup
+
+1. Deploy Firebase Functions and set environment secrets:
+  - `PIN_HASH_SECRET`: HMAC secret for hashing the PIN input.
+  - `PIN_HASH`: Precomputed HMAC-SHA256 hash of your chosen numeric PIN using the same secret.
+
+2. Deploy rules from `FIRESTORE_RULES.txt`.
+
+3. Client flow:
+  - Non-parent users are prompted for the Parent PIN on `/parent`.
+  - Callable function `verifyParentPin` validates the PIN and sets the `role` custom claim.
+  - The client refreshes ID token and grants access.
+
+### Lightweight audit events
+
+Anonymous, PII-safe audit events are written to `families/{familyId}/audit`:
+
+- `parentGate.open` — when the keypad is shown (client best-effort)
+- `parentGate.verify.success` — successful PIN verification (server authoritative)
+- `parentGate.verify.failure` — failed attempt with `reason` in meta: `INVALID_PIN`, `LOCKED`, or `SERVER_MISCONFIGURED` (server authoritative)
+- `lockout.started` — when max attempts is reached and a lockout begins (server authoritative)
+
+Event document schema:
+
+```
+{
+  event: string,
+  meta: object,              // PII-safe only; e.g., remainingAttempts, ttlMinutes, lockedUntilEpochMs
+  createdAt: Timestamp,      // serverTimestamp
+  expireAt: Timestamp,       // 30d retention marker
+  source: 'client' | 'callable'
+}
+```
+
+PII policy: Do not store emails, display names, or raw PINs. Family identity is implicit in the collection path.
+
+Retention: Configure a Firestore TTL policy on the `expireAt` field for the `families/{familyId}/audit/*` collection group to automatically purge events after 30 days.
+
+### Promote a parent (admin-only)
+
+Deploy the callable `setParentRole` and then call it once per promoted parent. Only callers with `role=admin` (or `admin=true`) custom claim can invoke it. The function:
+
+- Sets the user's auth custom claim `{ role: 'parent' }` (preserving other claims),
+- Mirrors `role: 'parent'` into `users/{uid}` (clients cannot write this field),
+- Revokes refresh tokens so the client must refresh to receive new claims.
+
+Example (Node/CLI) using Firebase Admin SDK or by creating a temporary admin user/session:
+
+1) Ensure your caller has an admin custom claim.
+2) Call the function `setParentRole` with `{ uid: '<TARGET_USER_UID>' }`.
+3) Ask the parent to sign out/in (or refresh) to pick up the claim.
+
 # Santa's Helper - Good List App
 
 A joyful, family-friendly Christmas list app that helps kids build their wish list while earning goodness points for real-world deeds. Parents can guide with thoughtful budgets and approvals.
@@ -42,6 +98,31 @@ cp .env.example .env.local
 Edit `.env.local` with your:
 - Firebase project credentials
 - OpenAI API key
+- ElevenLabs API key (stored as `ELEVENLABS_API_KEY`)
+
+### ElevenLabs Santa TTS Example
+
+Once the ElevenLabs key and Santa voice ID are in place, you can call the new API route and play the generated audio from any React component:
+
+```tsx
+async function playSantaLine(text: string) {
+  const response = await fetch('/api/santa-elevenlabs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+
+  if (!response.ok) {
+    throw new Error('Santa was busy and could not read the message.')
+  }
+
+  const audioBlob = await response.blob()
+  const audioUrl = URL.createObjectURL(audioBlob)
+  const player = new Audio(audioUrl)
+  await player.play()
+  URL.revokeObjectURL(audioUrl)
+}
+```
 
 ### 3. Firebase Setup
 

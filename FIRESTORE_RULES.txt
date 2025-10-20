@@ -1,12 +1,59 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Families collection: parent-only access to sensitive areas
+    match /families/{familyId} {
+      // Settings doc is readable/writable only by authenticated parents
+      match /settings {
+        allow read, write: if request.auth != null && request.auth.token.role == 'parent';
+      }
+      // Any docs under parentData: parent-only read/write
+      match /parentData/{document=**} {
+        allow read, write: if request.auth != null && request.auth.token.role == 'parent';
+      }
+
+      // Audit collection: write-only for parents (read can be restricted or enabled for parents as needed)
+      match /audit/{docId} {
+        allow write: if request.auth != null && request.auth.token.role == 'parent';
+        // Optional: allow parents to read their own audit trail
+        allow read: if request.auth != null && request.auth.token.role == 'parent';
+      }
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Everyone in the family account can read their own data
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Only parent role can write at the user root, but prevent clients from writing the role field
+      allow write: if request.auth != null && request.auth.uid == userId
+                   && request.auth.token.role == 'parent'
+                   && !('role' in request.resource.data);
+
+      // Allow server to mirror role into user doc when caller is admin (via custom claim)
+      allow update: if request.auth != null && request.auth.uid == userId
+                    && request.auth.token.admin == true;
+
       match /children/{childId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        // Only parent can write child documents by default
+        allow write: if request.auth != null && request.auth.uid == userId && request.auth.token.role == 'parent';
+
+        // Wishlist: parent-only writes
+        match /wishlist/{docId} {
+          allow read: if request.auth != null && request.auth.uid == userId;
+          allow write: if request.auth != null && request.auth.uid == userId && request.auth.token.role == 'parent';
+        }
+
+        // Deeds: allow child to create entries; parent controls updates/deletes
+        match /deeds/{docId} {
+          allow read: if request.auth != null && request.auth.uid == userId;
+          allow create: if request.auth != null && request.auth.uid == userId;
+          allow update, delete: if request.auth != null && request.auth.uid == userId && request.auth.token.role == 'parent';
+        }
+
+        // Fallback for other nested collections: parent-only writes
         match /{sub=**} {
-          allow read, write: if request.auth != null && request.auth.uid == userId;
+          allow read: if request.auth != null && request.auth.uid == userId;
+          allow write: if request.auth != null && request.auth.uid == userId && request.auth.token.role == 'parent';
         }
       }
     }

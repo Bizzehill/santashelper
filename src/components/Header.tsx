@@ -1,6 +1,5 @@
 'use client'
 import Image from 'next/image'
-import NorthPoleCounter from '@/components/NorthPoleCounter'
 import CandyCaneCountdown from '@/components/CandyCaneCountdown'
 import { daysUntilChristmas } from '@/lib/date'
 import { usePathname } from 'next/navigation'
@@ -22,10 +21,9 @@ export default function Header() {
           </a>
           <div className="brand-extra" style={{gap:12, display:'flex', alignItems:'center'}}>
             <CandyCaneCountdown daysRemaining={daysRemaining} />
-            <NorthPoleCounter compact />
           </div>
         </div>
-        <nav className="nav-holiday">
+        <nav className="nav-holiday" style={{ paddingTop: 8 }}>
           <a href="/">Home</a>
           <a href="/santa">Santa View</a>
           <a href="/parent">Parent</a>

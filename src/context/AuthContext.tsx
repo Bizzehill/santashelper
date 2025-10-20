@@ -9,11 +9,12 @@ import {
 } from 'firebase/auth'
 
 type AuthCtx = {
-  user: { uid: string; email: string | null } | null
+  user: { uid: string; email: string | null; role?: 'parent' | 'child' } | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   logOut: () => Promise<void>
+  refreshClaims: () => Promise<void>
 }
 
 const Ctx = createContext<AuthCtx | null>(null)
@@ -28,8 +29,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, u => {
-      setUser(u ? { uid: u.uid, email: u.email } : null)
+    const unsub = onAuthStateChanged(auth, async u => {
+      if (u) {
+        const token = await u.getIdTokenResult(true)
+        const role = (token.claims.role as 'parent' | 'child' | undefined)
+        setUser({ uid: u.uid, email: u.email, role })
+      } else {
+        setUser(null)
+      }
       setLoading(false)
     })
     return () => unsub()
@@ -44,9 +51,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const logOut = async () => {
     await signOut(auth)
   }
+  const refreshClaims = async () => {
+    if (!auth.currentUser) return
+    const u = auth.currentUser
+    await u.getIdToken(true)
+    const token = await u.getIdTokenResult()
+    const role = (token.claims.role as 'parent' | 'child' | undefined)
+    setUser({ uid: u.uid, email: u.email, role })
+  }
 
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, logOut }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, logOut, refreshClaims }}>
       {children}
     </Ctx.Provider>
   )
