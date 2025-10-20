@@ -36,3 +36,40 @@ export async function ensureFamilySettings(): Promise<{ ok: true; existed?: bool
   const res = await fn({})
   return res.data as any
 }
+
+export async function registerParent(): Promise<{ ok: true }>{
+  const fn = httpsCallable(functions, 'registerParent')
+  const res = await fn({})
+  return res.data as any
+}
+
+export async function setChildPin(childId: string, pin: string): Promise<{ ok: true }>{
+  const fn = httpsCallable(functions, 'setChildPin')
+  const res = await fn({ childId, pin })
+  return res.data as any
+}
+
+export async function verifyChildPin(familyId: string, childId: string, pin: string): Promise<{
+  ok: boolean
+  code?: 'NOT_FOUND' | 'NOT_SET'
+  expiresAtEpochMs?: number
+}>{
+  const fn = httpsCallable(functions, 'verifyChildPin')
+  const res = await fn({ familyId, childId, pin })
+  return res.data as any
+}
+
+export async function addOrUpdateChild(input: { childId?: string; name: string; pin: string; avatar?: string }): Promise<{ ok: true; childId: string }>{
+  const fn = httpsCallable(functions, 'addOrUpdateChild')
+  const res = await fn(input)
+  return res.data as any
+}
+
+export async function linkChild(input: { familyCode: string; childName: string; pin: string }): Promise<
+  | { ok: true; familyId: string; childId: string; expiresAtEpochMs: number }
+  | { ok: false; code: 'INVALID_CODE' | 'CHILD_NOT_FOUND' | 'PIN_NOT_SET' | 'WRONG_PIN' | 'ALREADY_LINKED' }
+>{
+  const fn = httpsCallable(functions, 'linkChild')
+  const res = await fn(input)
+  return res.data as any
+}

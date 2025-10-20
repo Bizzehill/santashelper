@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() { return request.auth != null }
+    function isParent() { return isAuthenticated() && request.auth.token.role == 'parent' }
+    function isAnonymous() {
+      return isAuthenticated() && request.auth.token.firebase != null && request.auth.token.firebase.sign_in_provider == 'anonymous'
+    }
+    // Parent owns family when their uid matches fid or they're listed in parentUIDs
+    function parentOwnsFamily(fid) {
+      return isParent() && (
+        request.auth.uid == fid || (
+          exists(/databases/$(database)/documents/families/$(fid)) &&
+          (request.auth.uid in get(/databases/$(database)/documents/families/$(fid)).data.parentUIDs)
+        )
+      )
+    }
+    // Child is linked when users/{auth.uid} declares familyId == fid and childId == the childId in scope
+    function isLinkedChildForFamily(fid, childId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == fid &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId == childId
+    }
+
+    // Families root doc: parents can read/write their family, but cannot change parentUIDs or familyCode via client
+    match /families/{fid} {
+      allow read: if parentOwnsFamily(fid);
+      allow create, update: if parentOwnsFamily(fid) &&
+        (
+          // parentUIDs/familyCode must be unchanged when present
+          (!('parentUIDs' in request.resource.data) || (('parentUIDs' in resource.data) && request.resource.data.parentUIDs == resource.data.parentUIDs)) &&
+          (!('familyCode' in request.resource.data) || (('familyCode' in resource.data) && request.resource.data.familyCode == resource.data.familyCode))
+        );
+      allow delete: if false; // server-only
+
+      // Common subcollections under families
+      match /childSessions/{uid} {
+        // Session owner can read their session; writes are server-side (Admin SDK)
+        allow read: if isAuthenticated() && request.auth.uid == uid;
+        allow write: if false;
+      }
+
+      // Other subcollections (e.g., settings, audit, parentData) are parent-only
+      match /{sub=**} {
+        allow read, write: if parentOwnsFamily(fid);
+      }
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Parents can read their family user doc; users can read their own doc
+      allow read: if parentOwnsFamily(userId) || (isAuthenticated() && request.auth.uid == userId);
+
+      // Writes: parent may update their own user doc but never the role/familyId/childId fields
+      allow create, update: if parentOwnsFamily(userId) && !('role' in request.resource.data) && !('familyId' in request.resource.data) && !('childId' in request.resource.data);
+      allow delete: if false;
+
+      // Children subcollection: parents have full control; linked child is scoped to own childId
+      match /children/{childId} {
+        allow read, write: if parentOwnsFamily(userId) || isLinkedChildForFamily(userId, childId);
+
+        // Nested collections under a child (e.g., wishlist, deeds)
+        match /{sub=**} {
+          allow read, write: if parentOwnsFamily(userId) || isLinkedChildForFamily(userId, childId);
+        }
+      }
+    }
+
+    // Anonymous workspace: only anonymous users can access their own space
+    match /anon_workspaces/{anonUid}/{sub=**} {
+      allow read, write: if isAnonymous() && isAuthenticated() && request.auth.uid == anonUid;
+    }
+  }
+}

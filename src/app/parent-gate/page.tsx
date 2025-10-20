@@ -4,10 +4,59 @@ import { useRouter } from 'next/navigation'
 import { verifyParentPin } from '@/lib/functions'
 import { useParentSession } from '@/hooks/useParentSession'
 import { logAuditEvent } from '@/lib/audit'
+import { useAuthWithClaims } from '@/lib/auth/useAuthWithClaims'
+import { db } from '@/lib/firebase'
+import { collection, doc, getDoc } from 'firebase/firestore'
+import { getCountFromServer } from 'firebase/firestore'
 
 export default function ParentGatePage() {
   const router = useRouter()
   const { startParentSession } = useParentSession()
+  const { user, claims, loading } = useAuthWithClaims()
+  const [checking, setChecking] = useState(true)
+  const [allowed, setAllowed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function precheck() {
+      if (loading) return
+      // Must be a signed-in parent to use PIN gate for parent tools
+      const role = (claims?.role as string | undefined) || undefined
+      if (!user || role !== 'parent') {
+        setAllowed(false)
+        setChecking(false)
+        return
+      }
+      try {
+        // Check children count
+        const childrenCol = collection(db, `users/${user.uid}/children`)
+        const countSnap = await getCountFromServer(childrenCol)
+        const childCount = countSnap.data().count || 0
+        if (cancelled) return
+        if (childCount === 0) {
+          router.replace('/parent/onboarding')
+          return
+        }
+        // Check parent PIN configured
+        const settingsRef = doc(db, `families/${user.uid}/settings`)
+        const settingsSnap = await getDoc(settingsRef)
+        const parentPinHash = settingsSnap.exists() ? (settingsSnap.data()?.parentPinHash as string | undefined) : undefined
+        if (cancelled) return
+        if (!parentPinHash) {
+          router.replace('/parent-pin-setup')
+          return
+        }
+        setAllowed(true)
+      } catch (e) {
+        // On error, be conservative and do not show PIN gate
+        setAllowed(false)
+      } finally {
+        if (!cancelled) setChecking(false)
+      }
+    }
+    precheck()
+    return () => { cancelled = true }
+  }, [loading, user, claims, router])
 
   // Stages: intro (long-press required) -> keypad
   const [stage, setStage] = useState<'intro' | 'keypad'>('intro')
@@ -179,6 +228,25 @@ export default function ParentGatePage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  if (loading || checking) {
+    return (
+      <section className="card p-6 animate-pulse" aria-busy="true" aria-live="polite">
+        <div className="h-6 w-40 bg-gray-200 rounded mb-3" />
+        <div className="h-4 w-64 bg-gray-200 rounded mb-2" />
+        <div className="h-4 w-56 bg-gray-200 rounded" />
+      </section>
+    )
+  }
+
+  if (!allowed) {
+    return (
+      <section className="card">
+        <h2>For grown-ups only</h2>
+        <p className="meter-text">Please sign in as a parent to continue.</p>
+      </section>
+    )
   }
 
   return (

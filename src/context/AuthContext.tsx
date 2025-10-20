@@ -5,7 +5,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut
+  signOut,
+  signInAnonymously
 } from 'firebase/auth'
 
 type AuthCtx = {
@@ -15,6 +16,7 @@ type AuthCtx = {
   signUp: (email: string, password: string) => Promise<void>
   logOut: () => Promise<void>
   refreshClaims: () => Promise<void>
+  signInAnon: () => Promise<void>
 }
 
 const Ctx = createContext<AuthCtx | null>(null)
@@ -60,8 +62,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setUser({ uid: u.uid, email: u.email, role })
   }
 
+  const signInAnon = async () => {
+    await signInAnonymously(auth)
+  }
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, logOut, refreshClaims }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, logOut, refreshClaims, signInAnon }}>
       {children}
     </Ctx.Provider>
   )

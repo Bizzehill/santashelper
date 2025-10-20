@@ -184,3 +184,18 @@ src/
 ## License
 
 This project is licensed under the MIT License.
+
+## Access Model
+
+- Parents create families and set per-child PINs.
+  - On signup/onboarding, a family is created and `families/{fid}/settings` is seeded with `pinStatus: 'unset'`.
+  - Parents set a Parent PIN and can add child profiles with per-child PINs.
+  - Firestore rules allow parents to read/write their family and all child documents; protected fields (role, familyCode, parentUIDs) cannot be changed by clients.
+
+- Children can use Santa anonymously at first.
+  - Anonymous users write to their own `anon_workspaces/{uid}/santa/*` or `users/{anonUid}/anonSanta/*` (depending on feature).
+  - When ready, they link to a parent family using a family code, their name, and child PIN.
+  - Linking migrates anon data to `users/{familyId}/children/{childId}` and starts a short-lived child session.
+
+- Linking flow location
+  - Visit `/santa/link-family` to link an anonymous session to a family using `familyCode + name + PIN`.
