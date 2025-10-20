@@ -21,3 +21,18 @@ export async function verifyParentPin(pin: string, familyId?: string): Promise<{
   const res = await fn(familyId ? { pin, familyId } : { pin })
   return res.data as any
 }
+
+export async function setParentPin(pin: string, opts?: { ttlMinutes?: number; familyId?: string }): Promise<{ ok: true }>{
+  const fn = httpsCallable(functions, 'setParentPin')
+  const payload: any = { pin }
+  if (opts?.ttlMinutes !== undefined) payload.ttlMinutes = opts.ttlMinutes
+  if (opts?.familyId) payload.familyId = opts.familyId
+  const res = await fn(payload)
+  return res.data as any
+}
+
+export async function ensureFamilySettings(): Promise<{ ok: true; existed?: boolean }>{
+  const fn = httpsCallable(functions, 'ensureFamilySettings')
+  const res = await fn({})
+  return res.data as any
+}

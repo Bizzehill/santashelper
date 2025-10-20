@@ -3,9 +3,19 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Families collection: parent-only access to sensitive areas
     match /families/{familyId} {
-      // Settings doc is readable/writable only by authenticated parents
+      // Settings doc: only the owning parent can read/write. Prevent changing parentPinHash once set.
       match /settings {
-        allow read, write: if request.auth != null && request.auth.token.role == 'parent';
+        function isParent() { return request.auth != null && request.auth.token.role == 'parent' }
+        function isOwner() { return request.auth != null && request.auth.uid == familyId }
+        // Allow read for owning parent
+        allow read: if isParent() && isOwner();
+        // Allow write for owning parent, but do not allow modifying parentPinHash if it already exists
+        allow write: if isParent() && isOwner() && (
+          // First-time set (no parentPinHash on existing doc)
+          !("parentPinHash" in resource.data) ||
+          // Or updates that do not touch the parentPinHash field
+          !("parentPinHash" in request.resource.data)
+        );
       }
       // Any docs under parentData: parent-only read/write
       match /parentData/{document=**} {
@@ -29,8 +39,7 @@ service cloud.firestore {
                    && !('role' in request.resource.data);
 
       // Allow server to mirror role into user doc when caller is admin (via custom claim)
-      allow update: if request.auth != null && request.auth.uid == userId
-                    && request.auth.token.admin == true;
+      allow update: if request.auth != null && request.auth.token.admin == true;
 
       match /children/{childId} {
         allow read: if request.auth != null && request.auth.uid == userId;

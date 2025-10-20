@@ -161,40 +161,44 @@ export const setParentPin = functions.https.onCall(async (data: any, context: fu
   }
   const callerUid = context.auth.uid
   const token = context.auth.token as Record<string, unknown>
-  const isAdmin = token['role'] === 'admin' || token['admin'] === true
+  const role = token['role'] as string | undefined
+  if (role !== 'parent') {
+    throw new functions.https.HttpsError('permission-denied', 'Parent role required')
+  }
 
   const pin: string = (data?.pin as string | undefined)?.trim() || ''
-  const ttl: number | undefined = typeof data?.ttlMinutes === 'number' ? data.ttlMinutes : undefined
-  const familyId: string = (data?.familyId as string | undefined) || callerUid
-
-  if (!/^[0-9]{4,8}$/.test(pin)) {
-    throw new functions.https.HttpsError('invalid-argument', 'PIN must be 4–8 digits')
+  const ttlMinutes: number | undefined = typeof data?.ttlMinutes === 'number' ? data.ttlMinutes : undefined
+  if (!/^[0-9]{4,6}$/.test(pin)) {
+    throw new functions.https.HttpsError('invalid-argument', 'PIN must be 4–6 digits')
   }
-  if (ttl !== undefined && (ttl < 5 || ttl > 60)) {
+  if (ttlMinutes !== undefined && (ttlMinutes < 5 || ttlMinutes > 60)) {
     throw new functions.https.HttpsError('invalid-argument', 'TTL must be between 5 and 60 minutes')
   }
-  // Only allow setting another family's PIN if admin
-  if (familyId !== callerUid && !isAdmin) {
-    throw new functions.https.HttpsError('permission-denied', 'Not allowed')
-  }
-  // Caller must be parent or admin
-  if (!(token['role'] === 'parent' || isAdmin)) {
-    throw new functions.https.HttpsError('permission-denied', 'Not allowed')
-  }
+
+  const dbi = admin.firestore()
+  const familyId = callerUid
+  const settingsRef = dbi.doc(`families/${familyId}/settings`)
 
   try {
-  const dbi = admin.firestore()
-  const settingsRef = dbi.doc(`families/${familyId}/settings`)
-    const hash = await bcrypt.hash(pin, 10)
-    const payload: any = {
-      parentPinHash: hash,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedBy: callerUid,
-    }
-    if (ttl !== undefined) payload.parentSessionTTLMinutes = ttl
-    await settingsRef.set(payload, { merge: true })
+    await dbi.runTransaction(async (tx: FirestoreTransaction) => {
+      const snap = await tx.get(settingsRef)
+      const existing = snap.exists ? (snap.data() as any) : {}
+      if (existing.parentPinHash) {
+        throw new functions.https.HttpsError('already-exists', 'Parent PIN already set')
+      }
+      const hash = await bcrypt.hash(pin, 10)
+      const payload: any = {
+        parentPinHash: hash,
+        pinStatus: 'set',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: callerUid,
+      }
+      if (ttlMinutes !== undefined) payload.parentSessionTTLMinutes = ttlMinutes
+      tx.set(settingsRef, payload, { merge: true })
+    })
     return { ok: true }
   } catch (e: any) {
+    if (e instanceof functions.https.HttpsError) throw e
     console.error('setParentPin error', e)
     throw new functions.https.HttpsError('internal', 'Unable to update settings')
   }
@@ -235,5 +239,50 @@ export const setParentRole = functions.https.onCall(async (data: any, context: f
   } catch (e: any) {
     console.error('setParentRole error', e)
     throw new functions.https.HttpsError('internal', e?.message || 'Failed to set parent role')
+  }
+})
+
+// Seed family settings on first sign-in. Ensures families/{uid}/settings exists with pinStatus: 'unset'.
+export const authOnCreate = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+  try {
+    const dbi = admin.firestore()
+    const uid = user.uid
+    const settingsRef = dbi.doc(`families/${uid}/settings`)
+    const snap = await settingsRef.get()
+    if (snap.exists) return
+    await settingsRef.create({
+      pinStatus: 'unset',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: uid,
+    })
+  } catch (e: any) {
+    // If already exists, treat as success; otherwise log for observability
+    if (e?.code !== 'already-exists') {
+      console.error('authOnCreate seed settings failed', e)
+    }
+  }
+})
+
+export const ensureFamilySettings = functions.https.onCall(async (_data: any, context: functions.https.CallableContext) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Authentication required')
+  }
+  const uid = context.auth.uid
+  const dbi = admin.firestore()
+  const settingsRef = dbi.doc(`families/${uid}/settings`)
+  try {
+    const snap = await settingsRef.get()
+    if (snap.exists) return { ok: true, existed: true }
+    await settingsRef.create({
+      pinStatus: 'unset',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: uid,
+    })
+    return { ok: true, existed: false }
+  } catch (e: any) {
+    // Treat already-exists as success
+    if (e?.code === 'already-exists') return { ok: true, existed: true }
+    console.error('ensureFamilySettings failed', e)
+    throw new functions.https.HttpsError('internal', 'Failed to ensure settings')
   }
 })

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { initializeTestEnvironment, RulesTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing'
 import { readFileSync } from 'fs'
 import { setLogLevel, doc, getDoc, setDoc, getFirestore, collection, addDoc } from 'firebase/firestore'
@@ -36,6 +37,25 @@ describe('Families access', () => {
     await assertFails(getDoc(doc(db, 'families/f1/settings')))
     await assertFails(setDoc(doc(db, 'families/f1/parentData/secret'), { a: 1 }))
     await assertFails(getDoc(doc(db, 'families/f1/parentData/secret')))
+  })
+
+  test('Parent can read unset settings doc (seeded)', async () => {
+    const adminDb = testEnv.unauthenticatedContext().firestore()
+    await setDoc(doc(adminDb, 'families/fseed/settings'), { pinStatus: 'unset' })
+    const ctx = testEnv.authenticatedContext('fseed', { role: 'parent' })
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'families/fseed/settings')))
+  })
+
+  test('Parent cannot change parentPinHash once set (Firestorm rule)', async () => {
+    const adminDb = testEnv.unauthenticatedContext().firestore()
+    await setDoc(doc(adminDb, 'families/f2/settings'), { parentPinHash: 'hash', pinStatus: 'set' })
+    const ctx = testEnv.authenticatedContext('f2', { role: 'parent' })
+    const db = ctx.firestore()
+    // Attempt to overwrite should fail per rules
+    await assertFails(setDoc(doc(db, 'families/f2/settings'), { parentPinHash: 'newhash' }, { merge: true }))
+    // Updating unrelated fields should succeed
+    await assertSucceeds(setDoc(doc(db, 'families/f2/settings'), { theme: 'dark' }, { merge: true }))
   })
 })
 

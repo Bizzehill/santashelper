@@ -1,11 +1,11 @@
 'use client'
 import React from 'react'
-import ParentRoute from '@/components/ParentRoute'
+import ParentGuard from '@/components/ParentGuard'
 
 export default function ParentLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ParentRoute>
+    <ParentGuard>
       {children}
-    </ParentRoute>
+    </ParentGuard>
   )
 }

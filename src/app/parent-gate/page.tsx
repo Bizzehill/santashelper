@@ -17,6 +17,60 @@ export default function ParentGatePage() {
   const startTsRef = useRef<number | null>(null)
   const PRESS_MS = 1200
 
+  // Micro-interactions helpers (respect reduced motion)
+  const prefersReducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const vibrate = (ms = 12) => {
+    if (prefersReducedMotion) return
+    try { if ('vibrate' in navigator) (navigator as any).vibrate(ms) } catch { /* noop */ }
+  }
+  const setRippleFromPointer = (e: React.PointerEvent<HTMLElement>) => {
+    const el = e.currentTarget as HTMLElement
+    if (!el || typeof (el as any).getBoundingClientRect !== 'function') return
+    const rect = el.getBoundingClientRect()
+    const rx = ((e.clientX - rect.left) / rect.width) * 100
+    const ry = ((e.clientY - rect.top) / rect.height) * 100
+    el.style.setProperty('--rx', `${Math.max(0, Math.min(100, rx))}%`)
+    el.style.setProperty('--ry', `${Math.max(0, Math.min(100, ry))}%`)
+  }
+  const setPressed = (el: HTMLElement, pressed: boolean) => {
+    if (pressed) el.setAttribute('data-pressed', 'true')
+    else el.removeAttribute('data-pressed')
+  }
+  const shake = (el: HTMLElement | null) => {
+    if (!el) return
+    el.classList.remove('shake')
+    // force reflow to restart animation
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    ;(el as any).offsetHeight
+    el.classList.add('shake')
+    setTimeout(() => el.classList.remove('shake'), 340)
+  }
+  const confettiBurst = () => {
+    if (prefersReducedMotion || typeof document === 'undefined') return
+    try {
+      const host = document.createElement('div')
+      host.className = 'confetti-host'
+      document.body.appendChild(host)
+      const colors = ['#e11d48', '#22c55e', '#fbbf24', '#ffffff']
+      const count = 24
+      const centerX = window.innerWidth / 2
+      const baseY = Math.min(window.innerHeight * 0.65, window.innerHeight - 80)
+      for (let i = 0; i < count; i++) {
+        const d = document.createElement('div')
+        d.className = 'confetti-piece'
+        const x = centerX + (Math.random() * 240 - 120)
+        const y = baseY + (Math.random() * 30 - 15)
+        d.style.left = `${x}px`
+        d.style.top = `${y}px`
+        d.style.background = colors[i % colors.length]
+        d.style.transform = `translateZ(0) rotate(${Math.random()*60-30}deg)`
+        d.style.animationDelay = `${Math.random() * 80}ms`
+        host.appendChild(d)
+      }
+      setTimeout(() => { host.remove() }, 900)
+    } catch { /* noop */ }
+  }
+
   const beginPress = useCallback(() => {
     if (pressing) return
     setPressing(true)
@@ -43,6 +97,7 @@ export default function ParentGatePage() {
       setStage('keypad')
       // Fire-and-forget audit event when keypad opens
       logAuditEvent('parentGate.open')
+      vibrate(10)
     }
   }, [])
 
@@ -54,6 +109,7 @@ export default function ParentGatePage() {
   const [msg, setMsg] = useState<string | null>(null)
   const [statusAnnounce, setStatusAnnounce] = useState('')
   const MAX = 6, MIN = 4
+  const dotsRef = useRef<HTMLDivElement | null>(null)
 
   const addDigit = (d: string) => {
     if (busy) return
@@ -107,12 +163,15 @@ export default function ParentGatePage() {
         } else {
           setMsg('Something went wrong. Please try again.')
         }
+        vibrate(8)
+        shake(dotsRef.current)
         return
       }
       if (!res.expiresAtEpochMs) {
         setMsg('No session TTL provided')
         return
       }
+      confettiBurst()
       startParentSession(res.expiresAtEpochMs)
       router.replace('/parent')
     } catch {
@@ -131,9 +190,12 @@ export default function ParentGatePage() {
           <p className="meter-text" id="longpress-hint">Press and hold Continue for 1–2 seconds to confirm you’re a grown-up.</p>
           <div className="mt-2">
             <button
-              className={`btn ${pressing ? 'secondary' : ''}`}
+              className={`btn haptic ripple ${pressing ? 'secondary' : ''}`}
               aria-describedby="longpress-hint"
               aria-pressed={pressing}
+              onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+              onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+              onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
               onMouseDown={beginPress}
               onMouseUp={()=>endPress(false)}
               onMouseLeave={()=>endPress(false)}
@@ -154,7 +216,7 @@ export default function ParentGatePage() {
           <p className="meter-text">Enter your 4–6 digit Parent PIN.</p>
           <div className="mb-2" role="status" aria-live="polite" style={{ position:'absolute', left:-9999 }}>{statusAnnounce}</div>
           {/* PIN display */}
-          <div className="row" style={{ gap: 8, marginTop: 8, justifyContent:'center' }}>
+          <div ref={dotsRef} className="row" style={{ gap: 8, marginTop: 8, justifyContent:'center' }}>
             {Array.from({ length: Math.max(pin.length, 4) }).map((_, i) => (
               <div key={i} aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 7, background: i < pin.length ? 'var(--accent)' : '#334155' }} />
             ))}
@@ -163,15 +225,55 @@ export default function ParentGatePage() {
           {/* Keypad */}
           <div role="group" aria-label="Numeric keypad" className="mt-3" style={{ display:'grid', gridTemplateColumns:'repeat(3,64px)', gap:8, justifyContent:'center' }}>
             {[1,2,3,4,5,6,7,8,9].map(n => (
-              <button key={n} className="btn" aria-label={`Digit ${n}`} onClick={()=>addDigit(String(n))} disabled={busy || pin.length>=MAX}>{n}</button>
+              <button
+                key={n}
+                className="btn keypad-key haptic ripple"
+                aria-label={`Digit ${n}`}
+                onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+                onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+                onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
+                onClick={()=>addDigit(String(n))}
+                disabled={busy || pin.length>=MAX}
+              >{n}</button>
             ))}
-            <button className="btn secondary" aria-label="Clear" onClick={clearAll} disabled={busy}>C</button>
-            <button className="btn" aria-label="Digit 0" onClick={()=>addDigit('0')} disabled={busy || pin.length>=MAX}>0</button>
-            <button className="btn secondary" aria-label="Backspace" onClick={backspace} disabled={busy}>←</button>
+            <button
+              className="btn secondary keypad-key haptic ripple"
+              aria-label="Clear"
+              onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+              onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+              onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
+              onClick={clearAll}
+              disabled={busy}
+            >C</button>
+            <button
+              className="btn keypad-key haptic ripple"
+              aria-label="Digit 0"
+              onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+              onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+              onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
+              onClick={()=>addDigit('0')}
+              disabled={busy || pin.length>=MAX}
+            >0</button>
+            <button
+              className="btn secondary keypad-key haptic ripple"
+              aria-label="Backspace"
+              onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+              onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+              onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
+              onClick={backspace}
+              disabled={busy}
+            >←</button>
           </div>
 
           <div className="mt-3 row" style={{ justifyContent:'center' }}>
-            <button className="btn" onClick={submit} disabled={busy || pin.length < MIN}>Unlock</button>
+            <button
+              className="btn haptic ripple"
+              onPointerDown={(e)=>{ setRippleFromPointer(e); setPressed(e.currentTarget, true); vibrate(8) }}
+              onPointerUp={(e)=>setPressed(e.currentTarget, false)}
+              onPointerLeave={(e)=>setPressed(e.currentTarget, false)}
+              onClick={submit}
+              disabled={busy || pin.length < MIN}
+            >Unlock</button>
           </div>
 
           {msg && <div className="badge" role="status" style={{ marginTop: 8 }}>{msg}</div>}

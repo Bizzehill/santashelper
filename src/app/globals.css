@@ -201,3 +201,33 @@ input,select,textarea{padding:10px;border-radius:10px;border:1px solid rgba(51,6
 .history-panel{margin-top:6px;background:rgba(14,22,40,.36);border:1px solid #2b3a59;border-radius:10px;padding:8px}
 /* Baseline focus ring for interactive elements */
 button:focus-visible, a:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+
+/* ========================= */
+/* Micro-interactions (Gate) */
+/* ========================= */
+
+@media (prefers-reduced-motion: reduce) {
+	.anim, .shake, .confetti-host, .ripple::after { animation: none !important; transition: none !important; }
+}
+
+/* Haptic-like press */
+.haptic { transition: transform 120ms cubic-bezier(.2,.9,.2,1), box-shadow 120ms ease; will-change: transform; }
+.haptic[data-pressed="true"] { transform: scale(0.97); box-shadow: 0 10px 20px -15px rgba(0,0,0,.55); }
+
+/* Keypad key micro-press */
+.keypad-key { transition: transform 80ms ease, background-color 80ms ease, box-shadow 80ms ease; will-change: transform; }
+.keypad-key:active, .keypad-key[data-pressed="true"] { transform: translateZ(0) scale(0.96); background: color-mix(in oklab, var(--accent) 16%, #1b2540); box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 40%, transparent); }
+
+/* Ripple highlight */
+.ripple { position: relative; overflow: hidden; }
+.ripple::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at var(--rx,50%) var(--ry,50%), rgba(255,255,255,.18), transparent 60%); opacity: 0; transform: scale(0.8); transition: opacity 180ms ease, transform 180ms ease; }
+.ripple[data-pressed="true"]::after { opacity: 1; transform: scale(1); }
+
+/* Subtle shake on invalid */
+@keyframes shakeX { 0%{transform:translateX(0)} 15%{transform:translateX(-4px)} 30%{transform:translateX(4px)} 45%{transform:translateX(-3px)} 60%{transform:translateX(3px)} 75%{transform:translateX(-2px)} 100%{transform:translateX(0)} }
+.shake { animation: shakeX 300ms cubic-bezier(.36,.07,.19,.97) both; will-change: transform; }
+
+/* Lightweight CSS confetti */
+.confetti-host { pointer-events:none; position:fixed; inset:0; z-index:60; overflow:hidden; }
+.confetti-piece { position:absolute; width:6px; height:10px; border-radius:2px; opacity:.95; transform: translate3d(0,0,0); animation: confetti-pop 700ms ease-out forwards; will-change: transform, opacity; }
+@keyframes confetti-pop { 0%{ transform:translateY(0) rotate(0); opacity:.95 } 100%{ transform:translateY(-80px) rotate(240deg); opacity:0 } }
