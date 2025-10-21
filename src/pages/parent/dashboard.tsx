@@ -1,6 +1,8 @@
 import Head from 'next/head'
-import { FormEvent, useEffect, useState } from 'react'
-import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from 'firebase/firestore'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useCallback } from 'react'
+import { v4 as uuid } from 'uuid'
+import { collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { useAuth } from '@/context/AuthContext'
 
@@ -13,10 +15,11 @@ export default function ParentDashboardPage() {
   const [children, setChildren] = useState<Child[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const parentId = useMemo(() => user?.uid ?? null, [user])
 
   useEffect(() => {
-    if (!user) return
-    const ref = query(collection(db, 'users', user.uid, 'children'), orderBy('createdAt', 'asc'))
+    if (!parentId) return
+    const ref = query(collection(db, 'users', parentId, 'children'), orderBy('createdAt', 'asc'))
     const unsub = onSnapshot(ref, snap => {
       const items: Child[] = snap.docs.map(docSnap => {
         const data = docSnap.data() as { name?: string; age?: number }
@@ -25,11 +28,11 @@ export default function ParentDashboardPage() {
       setChildren(items)
     })
     return () => unsub()
-  }, [user])
+  }, [parentId])
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!user || submitting) return
+    if (!parentId || submitting) return
     const trimmed = name.trim()
     if (!trimmed || age === '') {
       setStatus('Please provide both a name and age.')
@@ -38,7 +41,7 @@ export default function ParentDashboardPage() {
     setSubmitting(true)
     setStatus(null)
     try {
-      await addDoc(collection(db, 'users', user.uid, 'children'), {
+      await addDoc(collection(db, 'users', parentId, 'children'), {
         name: trimmed,
         age,
         createdAt: serverTimestamp(),
@@ -110,11 +113,70 @@ export default function ParentDashboardPage() {
                     <span className="meter-text" style={{ marginLeft: 8 }}>Age {child.age}</span>
                   )}
                 </div>
+                <ChildActions parentId={parentId!} childId={child.id} childName={child.name} />
               </li>
             ))}
           </ul>
         </section>
       )}
     </>
+  )
+}
+
+function ChildActions({ parentId, childId, childName }: { parentId: string; childId: string; childName?: string }) {
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
+  const [shareLoading, setShareLoading] = useState(false)
+
+  useEffect(() => {
+    if (!shareStatus) return
+    const timer = setTimeout(() => setShareStatus(null), 4000)
+    return () => clearTimeout(timer)
+  }, [shareStatus])
+
+  const generateLink = useCallback(async () => {
+    setShareStatus(null)
+    setShareLoading(true)
+    try {
+      const ticketRef = doc(db, 'shareTokens', `${parentId}_${childId}`)
+      const snap = await getDoc(ticketRef)
+      let token: string
+      if (snap.exists()) {
+        const data = snap.data() as { token?: string }
+        token = data.token || uuid()
+        await setDoc(ticketRef, { parentId, childId, childName: childName ?? null, token }, { merge: true })
+      } else {
+        token = uuid()
+        await setDoc(ticketRef, { parentId, childId, childName: childName ?? null, token, createdAt: serverTimestamp() })
+      }
+      const url = `${window.location.origin}/view/child/${childId}?parent=${encodeURIComponent(parentId)}&token=${token}`
+      await navigator.clipboard.writeText(url)
+      setShareStatus('Shareable link copied to clipboard!')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to create link. Please try again.'
+      setShareStatus(message)
+    } finally {
+      setShareLoading(false)
+    }
+  }, [childId, parentId])
+
+  return (
+    <div className="column" style={{ gap: 6, alignItems: 'flex-end' }}>
+      <div className="row" style={{ gap: 8 }}>
+        <a className="btn secondary" href={`/parent/child/${childId}`}>
+          Manage gifts
+        </a>
+        <button
+          type="button"
+          className="btn"
+          onClick={generateLink}
+          disabled={shareLoading}
+        >
+          {shareLoading ? 'Creating…' : 'Share list'}
+        </button>
+      </div>
+      {shareStatus && (
+        <span className="meter-text" style={{ fontSize: 13 }}>{shareStatus}</span>
+      )}
+    </div>
   )
 }
