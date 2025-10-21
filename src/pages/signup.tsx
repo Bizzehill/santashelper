@@ -23,8 +23,8 @@ export default function SignupPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await signUp(email.trim(), password, name)
-      router.push('/parent')
+  await signUp(email.trim(), password, name)
+  router.push('/parent/dashboard')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Sign up failed. Please try again.'
       setError(message)
@@ -35,7 +35,7 @@ export default function SignupPage() {
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace('/parent')
+      router.replace('/parent/dashboard')
     }
   }, [loading, user, router])
 
