@@ -3,6 +3,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isAuthenticated() { return request.auth != null }
     function isParent() { return isAuthenticated() && request.auth.token.role == 'parent' }
+    function isParentOwner(uid) { return isParent() && request.auth.uid == uid }
+    function hasShareAccess(parentId, childId) {
+      return request.auth != null && ('share' in request.auth.token) &&
+        request.auth.token.share.parentId == parentId &&
+        request.auth.token.share.childId == childId
+    }
     function isAnonymous() {
       return isAuthenticated() && request.auth.token.firebase != null && request.auth.token.firebase.sign_in_provider == 'anonymous'
     }
@@ -15,14 +21,6 @@ service cloud.firestore {
         )
       )
     }
-    // Child is linked when users/{auth.uid} declares familyId == fid and childId == the childId in scope
-    function isLinkedChildForFamily(fid, childId) {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.familyId == fid &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.childId == childId
-    }
-
     // Families root doc: parents can read/write their family, but cannot change parentUIDs or familyCode via client
     match /families/{fid} {
       allow read: if parentOwnsFamily(fid);
@@ -48,23 +46,39 @@ service cloud.firestore {
     }
 
     // Users collection
-    match /users/{userId} {
-      // Parents can read their family user doc; users can read their own doc
-      allow read: if parentOwnsFamily(userId) || (isAuthenticated() && request.auth.uid == userId);
-
-      // Writes: parent may update their own user doc but never the role/familyId/childId fields
-      allow create, update: if parentOwnsFamily(userId) && !('role' in request.resource.data) && !('familyId' in request.resource.data) && !('childId' in request.resource.data);
+    match /users/{parentId} {
+      // Parents can read and manage their own profile document, but never escalate role via client writes
+      allow read: if isParentOwner(parentId);
+      allow create: if isParentOwner(parentId) && ('role' in request.resource.data) && request.resource.data.role == 'parent';
+      allow update: if isParentOwner(parentId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
+        (!('familyId' in request.resource.data) || request.resource.data.familyId == resource.data.familyId) &&
+        (!('childId' in request.resource.data) || request.resource.data.childId == resource.data.childId);
       allow delete: if false;
 
-      // Children subcollection: parents have full control; linked child is scoped to own childId
+      // Children subcollection is parent-only for reads and writes
       match /children/{childId} {
-        allow read, write: if parentOwnsFamily(userId) || isLinkedChildForFamily(userId, childId);
+        allow read, write: if isParentOwner(parentId);
 
-        // Nested collections under a child (e.g., wishlist, deeds)
+        // Gifts are readable by the parent, or a caller presenting a share claim, and writable by the parent only
+        match /gifts/{giftId} {
+          allow read: if isParentOwner(parentId) || hasShareAccess(parentId, childId);
+          allow create, update, delete: if isParentOwner(parentId);
+        }
+
+        // Any other child-nested collections remain parent-only
         match /{sub=**} {
-          allow read, write: if parentOwnsFamily(userId) || isLinkedChildForFamily(userId, childId);
+          allow read, write: if isParentOwner(parentId);
         }
       }
+    }
+
+    // Share tokens are controlled by the parent; optional share claims can read the token document for verification
+    match /shareTokens/{shareId} {
+      allow create: if isParent() && request.auth.uid == request.resource.data.parentId;
+      allow read: if (isParent() && request.auth.uid == resource.data.parentId) ||
+        hasShareAccess(resource.data.parentId, resource.data.childId);
+      allow update, delete: if isParent() && request.auth.uid == resource.data.parentId;
     }
 
     // Anonymous workspace: only anonymous users can access their own space
