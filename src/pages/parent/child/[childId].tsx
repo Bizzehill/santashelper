@@ -7,9 +7,8 @@ import { useAuth } from '@/context/AuthContext'
 
 type Gift = {
   id: string
-  name: string
+  title: string
   description?: string | null
-  imageUrl?: string | null
   createdAt?: { seconds: number; nanoseconds: number }
 }
 
@@ -17,9 +16,8 @@ export default function ChildGiftPage() {
   const router = useRouter()
   const { childId } = router.query as { childId?: string }
   const { user } = useAuth()
-  const [giftName, setGiftName] = useState('')
+  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
   const [gifts, setGifts] = useState<Gift[]>([])
   const [status, setStatus] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -37,9 +35,8 @@ export default function ChildGiftPage() {
         const data = docSnap.data() as Gift
         return {
           id: docSnap.id,
-          name: data.name || 'Unnamed gift',
+          title: data.title || 'Untitled gift',
           description: data.description ?? null,
-          imageUrl: data.imageUrl ?? null,
           createdAt: data.createdAt
         }
       })
@@ -51,23 +48,21 @@ export default function ChildGiftPage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!parentId || !childId || submitting) return
-    const trimmedName = giftName.trim()
-    if (!trimmedName) {
-      setStatus('Please give this gift a name to keep Santa organized!')
+    const trimmedTitle = title.trim()
+    if (!trimmedTitle) {
+      setStatus('Please give this gift a title to keep Santa organized!')
       return
     }
     setSubmitting(true)
     setStatus(null)
     try {
       await addDoc(collection(db, 'users', parentId, 'children', childId, 'gifts'), {
-        name: trimmedName,
+        title: trimmedTitle,
         description: description.trim() || null,
-        imageUrl: imageUrl.trim() || null,
         createdAt: serverTimestamp()
       })
-      setGiftName('')
+      setTitle('')
       setDescription('')
-      setImageUrl('')
       setStatus('Gift added to the list! 🎁')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Uh oh! Could not add this gift. Try again?'
@@ -99,7 +94,7 @@ export default function ChildGiftPage() {
         <title>Child Gifts | Santa&apos;s Helper</title>
       </Head>
       <section className="card" aria-live="polite">
-        <h2 style={{ marginTop: 0, fontSize: 30, fontFamily: '"Comic Sans MS", "Comic Neue", cursive' }}>{heading}</h2>
+  <h2 style={{ marginTop: 0, fontSize: 30, fontFamily: '"Comic Sans MS", "Comic Neue", cursive' }}>{heading}</h2>
         <p className="meter-text" style={{ fontSize: 18 }}>Add sparkly gift ideas below. Santa&apos;s elves love lots of details!</p>
         <form
           onSubmit={handleSubmit}
@@ -114,11 +109,11 @@ export default function ChildGiftPage() {
           }}
         >
           <label className="column" style={{ gap: 6, fontSize: 18, fontWeight: 600 }}>
-            Gift name
+            Gift title
             <input
               type="text"
-              value={giftName}
-              onChange={e => setGiftName(e.target.value)}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
               placeholder="Glittery Rocket Sled"
               required
               disabled={submitting}
@@ -145,24 +140,6 @@ export default function ChildGiftPage() {
                 padding: '12px 16px',
                 borderRadius: 14,
                 border: '3px solid #38bdf8',
-                backgroundColor: '#0f172a',
-                color: '#fff'
-              }}
-            />
-          </label>
-          <label className="column" style={{ gap: 6, fontSize: 18, fontWeight: 600 }}>
-            Image URL (optional)
-            <input
-              type="url"
-              value={imageUrl}
-              onChange={e => setImageUrl(e.target.value)}
-              placeholder="https://example.com/sparkle.png"
-              disabled={submitting}
-              style={{
-                fontSize: 18,
-                padding: '12px 16px',
-                borderRadius: 14,
-                border: '3px solid #facc15',
                 backgroundColor: '#0f172a',
                 color: '#fff'
               }}
@@ -224,26 +201,12 @@ export default function ChildGiftPage() {
               >
                 <div>
                   <h4 style={{ fontSize: 20, margin: 0, fontFamily: '"Comic Sans MS", "Comic Neue", cursive', color: '#fef08a' }}>
-                    {gift.name}
+                    {gift.title}
                   </h4>
                   {gift.description && (
                     <p style={{ marginTop: 8, fontSize: 16, color: '#e2e8f0' }}>{gift.description}</p>
                   )}
                 </div>
-                {gift.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={gift.imageUrl}
-                    alt={gift.name}
-                    style={{
-                      width: '100%',
-                      height: 140,
-                      objectFit: 'cover',
-                      borderRadius: 16,
-                      border: '3px solid rgba(248,250,252,0.4)'
-                    }}
-                  />
-                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(gift.id)}
