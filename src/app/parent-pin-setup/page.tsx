@@ -51,7 +51,7 @@ export default function ParentPinSetupPage() {
       const expiresAt = Date.now() + ttl * 60 * 1000
       startParentSession(expiresAt)
       setMsg('PIN saved! Taking you to the parent tools…')
-      setTimeout(() => router.replace('/parent'), 500)
+      setTimeout(() => router.replace('/parent/dashboard'), 500)
     } catch (e: any) {
       const code = e?.code as string | undefined
       if (code === 'auth/requires-recent-login') {

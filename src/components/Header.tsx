@@ -2,11 +2,14 @@
 import Image from 'next/image'
 import CandyCaneCountdown from '@/components/CandyCaneCountdown'
 import { daysUntilChristmas } from '@/lib/date'
-import { usePathname } from 'next/navigation'
 
-export default function Header() {
-  const pathname = usePathname()
-  const isSanta = pathname?.startsWith('/santa')
+type HeaderProps = {
+  pathname?: string | null
+}
+
+export default function Header({ pathname }: HeaderProps) {
+  const safePath = pathname ?? ''
+  const isSanta = safePath.startsWith('/santa')
   const daysRemaining = daysUntilChristmas(new Date()).days
   return (
     <header className={`site-header ${isSanta ? 'translucent' : ''}`}>
@@ -26,7 +29,7 @@ export default function Header() {
         <nav className="nav-holiday" style={{ paddingTop: 8 }}>
           <a href="/">Home</a>
           <a href="/santa">Santa View</a>
-          <a href="/parent">Parent</a>
+          <a href="/parent/dashboard">Parent</a>
           <a href="/login">Login</a>
         </nav>
       </div>

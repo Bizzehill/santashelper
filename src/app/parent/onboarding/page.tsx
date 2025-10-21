@@ -61,7 +61,7 @@ export default function ParentOnboardingPage() {
   }
 
   function finish() {
-    router.push('/parent')
+    router.push('/parent/dashboard')
   }
 
   if (loading) {

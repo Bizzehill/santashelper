@@ -24,7 +24,7 @@ export default function Page() {
           <p className="hero-sub text-lg leading-relaxed">where kids and parents bring Christmas magic to life together!</p>
           <div className="cta-row mt-2">
             <a className="btn" href="/santa">Enter Santa View</a>
-            <a className="btn secondary" href="/parent">Parent Dashboard</a>
+            <a className="btn secondary" href="/parent/dashboard">Parent Dashboard</a>
           </div>
         </div>
         <div className="hero-elf" aria-hidden="true">

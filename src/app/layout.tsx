@@ -2,7 +2,7 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { AuthProvider } from '@/context/AuthContext'
 import { ReauthProvider } from '@/context/ReauthContext'
-import Header from '@/components/Header'
+import Header from '@/components/HeaderAppShell'
 
 export const metadata: Metadata = {
   title: "Santa's Helper",

@@ -222,7 +222,7 @@ export default function ParentGatePage() {
       }
       confettiBurst()
       startParentSession(res.expiresAtEpochMs)
-      router.replace('/parent')
+      router.replace('/parent/dashboard')
     } catch {
       setMsg('We couldn’t connect. Try again in a moment.')
     } finally {
