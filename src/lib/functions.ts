@@ -2,7 +2,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 
-export async function verifyParentPin(pin: string, familyId?: string): Promise<{
+type VerifyParentPinResult = {
   ok: boolean
   // error shape
   code?: 'UNAUTHENTICATED' | 'INVALID_ARGUMENT' | 'SERVER_MISCONFIGURED' | 'LOCKED' | 'INVALID_PIN'
@@ -13,75 +13,76 @@ export async function verifyParentPin(pin: string, familyId?: string): Promise<{
   // rate-limit info
   remainingAttempts?: number
   lockedUntilEpochMs?: number
-}> {
-  const fn = httpsCallable(functions, 'verifyParentPin')
-  const res = await fn(familyId ? { pin, familyId } : { pin })
-  return res.data as any
 }
 
-export async function setParentPin(pin: string, opts?: { ttlMinutes?: number; familyId?: string }): Promise<{ ok: true }>{
-  const fn = httpsCallable(functions, 'setParentPin')
-  const payload: any = { pin }
-  if (opts?.ttlMinutes !== undefined) payload.ttlMinutes = opts.ttlMinutes
-  if (opts?.familyId) payload.familyId = opts.familyId
-  const res = await fn(payload)
-  return res.data as any
+export async function verifyParentPin(pin: string, familyId?: string): Promise<VerifyParentPinResult> {
+  const fn = httpsCallable<{ pin: string; familyId?: string }, VerifyParentPinResult>(functions, 'verifyParentPin')
+  const res = await fn(familyId ? { pin, familyId } : { pin })
+  return res.data
+}
+
+export async function setParentPin(pin: string, opts?: { ttlMinutes?: number; familyId?: string }): Promise<{ ok: true }> {
+  const fn = httpsCallable<{ pin: string; ttlMinutes?: number; familyId?: string }, { ok: true }>(functions, 'setParentPin')
+  const res = await fn({ pin, ttlMinutes: opts?.ttlMinutes, familyId: opts?.familyId })
+  return res.data
 }
 
 // Called once right after a new parent account is created. Grants the role=parent
 // custom claim, generates the family's shareable code, and seeds settings.
-export async function createFamilyOnSignup(): Promise<{ familyId: string; familyCode?: string }>{
-  const fn = httpsCallable(functions, 'createFamilyOnSignup')
+export async function createFamilyOnSignup(): Promise<{ familyId: string; familyCode?: string }> {
+  const fn = httpsCallable<{ asParent: true }, { familyId: string; familyCode?: string }>(functions, 'createFamilyOnSignup')
   const res = await fn({ asParent: true })
-  return res.data as unknown as { familyId: string; familyCode?: string }
+  return res.data
 }
 
-export async function setChildPin(childId: string, pin: string): Promise<{ ok: true }>{
-  const fn = httpsCallable(functions, 'setChildPin')
+export async function setChildPin(childId: string, pin: string): Promise<{ ok: true }> {
+  const fn = httpsCallable<{ childId: string; pin: string }, { ok: true }>(functions, 'setChildPin')
   const res = await fn({ childId, pin })
-  return res.data as any
+  return res.data
 }
 
-export async function verifyChildPin(familyId: string, childId: string, pin: string): Promise<{
+type VerifyChildPinResult = {
   ok: boolean
   code?: 'NOT_FOUND' | 'NOT_SET'
   expiresAtEpochMs?: number
-}>{
-  const fn = httpsCallable(functions, 'verifyChildPin')
+}
+
+export async function verifyChildPin(familyId: string, childId: string, pin: string): Promise<VerifyChildPinResult> {
+  const fn = httpsCallable<{ familyId: string; childId: string; pin: string }, VerifyChildPinResult>(functions, 'verifyChildPin')
   const res = await fn({ familyId, childId, pin })
-  return res.data as any
+  return res.data
 }
 
-export async function addOrUpdateChild(input: { childId?: string; name: string; pin: string; avatar?: string }): Promise<{ ok: true; childId: string }>{
-  const fn = httpsCallable(functions, 'addOrUpdateChild')
+export async function addOrUpdateChild(input: { childId?: string; name: string; pin: string; avatar?: string }): Promise<{ ok: true; childId: string }> {
+  const fn = httpsCallable<typeof input, { ok: true; childId: string }>(functions, 'addOrUpdateChild')
   const res = await fn(input)
-  return res.data as any
+  return res.data
 }
 
-export async function linkChild(input: { familyCode: string; childName: string; pin: string }): Promise<
+type LinkChildResult =
   | { ok: true; familyId: string; childId: string; expiresAtEpochMs: number }
   | { ok: false; code: 'INVALID_CODE' | 'CHILD_NOT_FOUND' | 'PIN_NOT_SET' | 'WRONG_PIN' | 'ALREADY_LINKED' }
->{
-  const fn = httpsCallable(functions, 'linkChild')
+
+export async function linkChild(input: { familyCode: string; childName: string; pin: string }): Promise<LinkChildResult> {
+  const fn = httpsCallable<typeof input, LinkChildResult>(functions, 'linkChild')
   const res = await fn(input)
-  return res.data as any
+  return res.data
 }
 
-export async function createShareLink(childId: string): Promise<{ ok: true; token: string; parentId: string; childId: string }>{
-  const fn = httpsCallable(functions, 'createShareLink')
+export async function createShareLink(childId: string): Promise<{ ok: true; token: string; parentId: string; childId: string }> {
+  const fn = httpsCallable<{ childId: string }, { ok: true; token: string; parentId: string; childId: string }>(functions, 'createShareLink')
   const res = await fn({ childId })
-  return res.data as unknown as { ok: true; token: string; parentId: string; childId: string }
+  return res.data
 }
 
 export type SharedWishlistItem = { id: string; name: string; description: string | null; url: string | null; image: string | null }
 
-export async function getSharedWishlist(input: { parentId: string; childId: string; token: string }): Promise<
+type GetSharedWishlistResult =
   | { ok: true; childName: string; items: SharedWishlistItem[] }
   | { ok: false; error: 'MISSING_PARAMS' | 'NOT_FOUND' | 'INVALID_TOKEN' }
->{
-  const fn = httpsCallable(functions, 'getSharedWishlist')
+
+export async function getSharedWishlist(input: { parentId: string; childId: string; token: string }): Promise<GetSharedWishlistResult> {
+  const fn = httpsCallable<typeof input, GetSharedWishlistResult>(functions, 'getSharedWishlist')
   const res = await fn(input)
-  return res.data as unknown as
-    | { ok: true; childName: string; items: SharedWishlistItem[] }
-    | { ok: false; error: 'MISSING_PARAMS' | 'NOT_FOUND' | 'INVALID_TOKEN' }
+  return res.data
 }

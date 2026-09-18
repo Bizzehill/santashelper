@@ -20,8 +20,7 @@ async function pitchShiftMp3(input: Buffer, semitones: number): Promise<Buffer> 
       const filter = `asetrate=48000*${F},aresample=48000,atempo=${atempo}`
 
       if (ffmpegPath) {
-        // @ts-ignore - types may not include setFfmpegPath
-        ffmpeg.setFfmpegPath(ffmpegPath as any)
+        ffmpeg.setFfmpegPath(ffmpegPath)
       }
 
       const inputStream = Readable.from(input)
@@ -36,7 +35,7 @@ async function pitchShiftMp3(input: Buffer, semitones: number): Promise<Buffer> 
 
       const out = command.pipe()
       out.on('data', (c: Buffer) => chunks.push(c))
-  out.on('error', (e: any) => reject(e))
+      out.on('error', (e) => reject(e))
     } catch (e) {
       reject(e)
     }
@@ -77,14 +76,14 @@ export async function POST(req: Request) {
       const dataUrl = `data:audio/mpeg;base64,${b64}`
       console.log(`[santa-readaloud-deep] success bytes=${shifted.length}`)
       return NextResponse.json({ ok: true, dataUrl })
-    } catch (e) {
+    } catch {
       console.warn('[santa-readaloud-deep] ffmpeg failed, returning unshifted audio')
       const b64 = baseBuf.toString('base64')
       const dataUrl = `data:audio/mpeg;base64,${b64}`
       return NextResponse.json({ ok: true, dataUrl, degraded: true })
     }
-  } catch (err: any) {
-    const msg = typeof err?.message === 'string' ? err.message : 'Unexpected error'
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unexpected error'
     console.error('[santa-readaloud-deep] failure', msg)
     return NextResponse.json({ ok: false, error: 'TTS failed' }, { status: 500 })
   }

@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
     const app = getApp()
-    const fn = httpsCallable(getFunctions(app), 'setParentPin')
-    const res: any = await fn({ pin })
+    const fn = httpsCallable<{ pin: string }, { ok: boolean }>(getFunctions(app), 'setParentPin')
+    const res = await fn({ pin })
     if (res?.data?.ok) return NextResponse.json({ ok: true })
     return NextResponse.json({ ok: false }, { status: 400 })
   } catch {

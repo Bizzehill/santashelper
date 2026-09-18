@@ -32,7 +32,7 @@ export function useAuthWithClaims(): {
         await u.getIdToken(true)
         const token = await u.getIdTokenResult()
         setClaims(token.claims as AuthClaims)
-      } catch (e: any) {
+      } catch (e) {
         // Non-fatal: capture error and best-effort read claims without refresh
         setError(e instanceof Error ? e : new Error(String(e)))
         try {

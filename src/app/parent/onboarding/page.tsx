@@ -34,7 +34,7 @@ export default function ParentOnboardingPage() {
     const childrenCol = collection(db, `users/${user.uid}/children`)
     const q = query(childrenCol)
     const unsub = onSnapshot(q, (snap) => {
-      const list: Child[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
+      const list: Child[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Child>) }))
       setChildren(list)
     })
     return () => unsub()
@@ -53,8 +53,8 @@ export default function ParentOnboardingPage() {
     try {
       await addOrUpdateChild({ name: form.name.trim(), pin: form.pin, avatar: form.avatar })
       setForm({ name: '', pin: '', confirm: '', avatar: AVATARS[0] })
-    } catch (err: any) {
-      setError(err?.message || 'Could not add child')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add child')
     } finally {
       setSubmitting(false)
     }

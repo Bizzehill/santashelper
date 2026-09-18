@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 
 export type SantaHistoryItem = {
@@ -51,7 +51,7 @@ export default function SantaChatCard({ lastAffirmation, lastAffirmationAt, hist
 
   const canSpeechSynthesis = typeof window !== 'undefined' && 'speechSynthesis' in window
 
-  const stopAll = () => {
+  const stopAll = useCallback(() => {
     // Stop HTMLAudio playback
     try {
       const a = audioRef.current
@@ -64,7 +64,7 @@ export default function SantaChatCard({ lastAffirmation, lastAffirmationAt, hist
     try { if (canSpeechSynthesis) window.speechSynthesis.cancel() } catch {}
     setSpeaking(false)
     setPreparingAudio(false)
-  }
+  }, [canSpeechSynthesis])
 
   const pickVoice = (preferName?: string) => {
     if (!canSpeechSynthesis) return undefined
@@ -137,7 +137,7 @@ export default function SantaChatCard({ lastAffirmation, lastAffirmationAt, hist
     return () => {
       stopAll()
     }
-  }, [])
+  }, [stopAll])
 
   useEffect(() => {
     try { localStorage.setItem('sh_tts_deep', useDeep ? 'true' : 'false') } catch {}

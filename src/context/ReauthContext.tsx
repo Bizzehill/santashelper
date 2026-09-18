@@ -2,6 +2,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import { auth } from '@/lib/firebase'
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
+import { FirebaseError } from 'firebase/app'
 
 type ReauthContextType = {
   showReauthModal: (opts?: { emailHint?: string }) => Promise<void>
@@ -22,7 +23,7 @@ export const ReauthProvider: React.FC<React.PropsWithChildren> = ({ children }) 
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [resolver, setResolver] = useState<null | ((v: void | PromiseLike<void>) => void)>(null)
-  const [rejecter, setRejecter] = useState<null | ((e?: any) => void)>(null)
+  const [rejecter, setRejecter] = useState<null | ((reason?: unknown) => void)>(null)
 
   const close = useCallback(() => {
     setOpen(false)
@@ -53,8 +54,8 @@ export const ReauthProvider: React.FC<React.PropsWithChildren> = ({ children }) 
       await reauthenticateWithCredential(auth.currentUser, cred)
       resolver?.()
       close()
-    } catch (e: any) {
-      const code = e?.code as string | undefined
+    } catch (e) {
+      const code = e instanceof FirebaseError ? e.code : undefined
       if (code === 'auth/wrong-password') setMessage('That password didn’t work. Please try again.')
       else if (code === 'auth/user-mismatch') setMessage('This email doesn’t match the signed-in account.')
       else setMessage('We couldn’t confirm your identity. Please try again.')

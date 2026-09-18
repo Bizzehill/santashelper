@@ -5,10 +5,19 @@ declare module 'ffmpeg-static' {
 
 declare module 'fluent-ffmpeg' {
   import { Readable } from 'stream'
-  type FfmpegCommand = any
+
+  interface FfmpegCommand {
+    input(input: string | Readable): FfmpegCommand
+    inputFormat(format: string): FfmpegCommand
+    audioFilters(filter: string): FfmpegCommand
+    format(format: string): FfmpegCommand
+    on(event: 'error', callback: (err: Error) => void): FfmpegCommand
+    on(event: 'end', callback: () => void): FfmpegCommand
+    pipe(): Readable
+  }
+
   function ffmpeg(input?: string | Readable): FfmpegCommand
   namespace ffmpeg {
-    let _setFfmpegPath: (path: string) => void
     function setFfmpegPath(path: string): void
   }
   export default ffmpeg

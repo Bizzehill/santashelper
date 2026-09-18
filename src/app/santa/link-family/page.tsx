@@ -36,8 +36,8 @@ export default function LinkFamilyPage() {
       // Start local child session and route to /santa
       startChildSession(res.familyId, res.childId, res.expiresAtEpochMs)
       router.replace('/santa')
-    } catch (e: any) {
-      setError(e?.message || 'Could not link at this time')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not link at this time')
     } finally {
       setSubmitting(false)
     }

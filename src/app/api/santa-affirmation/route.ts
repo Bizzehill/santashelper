@@ -58,12 +58,14 @@ export async function POST(req: NextRequest) {
         max_output_tokens: 60,
         temperature: 0.7,
       })
-      // @ts-ignore - output_text is provided by SDK helpers
-      const textOut = (resp as any).output_text as string | undefined
+      // output_text is a convenience getter the installed SDK's types don't declare.
+      type ResponsesApiResult = { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> }
+      const result = resp as unknown as ResponsesApiResult
+      const textOut = result.output_text
       if (textOut && textOut.trim()) {
         message = textOut.trim()
       } else {
-        const out = (resp as any).output?.[0]?.content?.[0]?.text as string | undefined
+        const out = result.output?.[0]?.content?.[0]?.text
         message = (out || '').trim()
       }
     } catch {
@@ -87,7 +89,7 @@ Write one encouraging sentence from Santa.` }
     message = clampOneSentenceUnder20Words(message)
 
     return NextResponse.json({ ok: true, message })
-  } catch (e) {
+  } catch {
     return NextResponse.json({ ok: true, message: 'Santa is proud of your good heart!' })
   }
 }

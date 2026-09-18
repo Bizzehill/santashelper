@@ -1,6 +1,7 @@
 'use client'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { FirebaseError } from 'firebase/app'
 import { useAuthWithClaims } from '@/lib/auth/useAuthWithClaims'
 import { useRequireRecentLogin } from '@/lib/requireRecentLogin'
 import { setParentPin } from '@/lib/functions'
@@ -52,8 +53,8 @@ export default function ParentPinSetupPage() {
       startParentSession(expiresAt)
       setMsg('PIN saved! Taking you to the parent tools…')
       setTimeout(() => router.replace('/parent/dashboard'), 500)
-    } catch (e: any) {
-      const code = e?.code as string | undefined
+    } catch (e) {
+      const code = e instanceof FirebaseError ? e.code : undefined
       if (code === 'auth/requires-recent-login') {
         setMsg('Please confirm it’s you to continue.')
       } else if (code === 'permission-denied') {
@@ -66,7 +67,7 @@ export default function ParentPinSetupPage() {
     } finally {
       setBusy(false)
     }
-  }, [validFormat, pin, confirm, user, router, requireRecentLogin, startParentSession])
+  }, [validFormat, pin, confirm, user, router, requireRecentLogin, startParentSession, ttl])
 
   return (
     <section className="card" aria-live="polite">

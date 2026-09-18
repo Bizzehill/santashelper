@@ -50,8 +50,8 @@ export async function POST(req: Request) {
         'Cache-Control': 'no-store',
       },
     })
-  } catch (err: any) {
-    const message = typeof err?.message === 'string' ? err.message : 'Unexpected error'
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unexpected error'
     console.error('[santa-elevenlabs] failure', message)
     return NextResponse.json({ ok: false, error: 'TTS failed' }, { status: 500 })
   }

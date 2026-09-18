@@ -44,13 +44,14 @@ export async function POST(req: Request) {
     const arrayBuf = await resp.arrayBuffer()
     const buf = Buffer.from(arrayBuf)
     const b64 = buf.toString('base64')
-    const contentType = (resp as any).headers?.get?.('content-type') || 'audio/mpeg'
+    const respWithHeaders = resp as unknown as { headers?: { get?: (name: string) => string | null } }
+    const contentType = respWithHeaders.headers?.get?.('content-type') || 'audio/mpeg'
     const dataUrl = `data:${contentType};base64,${b64}`
 
     console.log(`[santa-readaloud] success bytes=${buf.length}`)
     return NextResponse.json({ ok: true, dataUrl })
-  } catch (err: any) {
-    const msg = typeof err?.message === 'string' ? err.message : 'Unexpected error'
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unexpected error'
     console.error('[santa-readaloud] failure', msg)
     return NextResponse.json({ ok: false, error: 'TTS failed' }, { status: 500 })
   }

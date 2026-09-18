@@ -47,7 +47,7 @@ export default function ParentGatePage() {
           return
         }
         setAllowed(true)
-      } catch (e) {
+      } catch {
         // On error, be conservative and do not show PIN gate
         setAllowed(false)
       } finally {
@@ -68,13 +68,13 @@ export default function ParentGatePage() {
 
   // Micro-interactions helpers (respect reduced motion)
   const prefersReducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const vibrate = (ms = 12) => {
+  const vibrate = useCallback((ms = 12) => {
     if (prefersReducedMotion) return
-    try { if ('vibrate' in navigator) (navigator as any).vibrate(ms) } catch { /* noop */ }
-  }
+    try { if ('vibrate' in navigator) navigator.vibrate(ms) } catch { /* noop */ }
+  }, [prefersReducedMotion])
   const setRippleFromPointer = (e: React.PointerEvent<HTMLElement>) => {
     const el = e.currentTarget as HTMLElement
-    if (!el || typeof (el as any).getBoundingClientRect !== 'function') return
+    if (!el || typeof el.getBoundingClientRect !== 'function') return
     const rect = el.getBoundingClientRect()
     const rx = ((e.clientX - rect.left) / rect.width) * 100
     const ry = ((e.clientY - rect.top) / rect.height) * 100
@@ -90,7 +90,7 @@ export default function ParentGatePage() {
     el.classList.remove('shake')
     // force reflow to restart animation
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    ;(el as any).offsetHeight
+    el.offsetHeight
     el.classList.add('shake')
     setTimeout(() => el.classList.remove('shake'), 340)
   }
@@ -120,6 +120,20 @@ export default function ParentGatePage() {
     } catch { /* noop */ }
   }
 
+  const endPress = useCallback((completed = false) => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+    startTsRef.current = null
+    setPressing(false)
+    setProgress(0)
+    if (completed) {
+      setStage('keypad')
+      // Fire-and-forget audit event when keypad opens
+      logAuditEvent('parentGate.open')
+      vibrate(10)
+    }
+  }, [vibrate])
+
   const beginPress = useCallback(() => {
     if (pressing) return
     setPressing(true)
@@ -134,21 +148,7 @@ export default function ParentGatePage() {
         endPress(true)
       }
     }, 50)
-  }, [pressing])
-
-  const endPress = useCallback((completed = false) => {
-    if (timerRef.current) clearInterval(timerRef.current)
-    timerRef.current = null
-    startTsRef.current = null
-    setPressing(false)
-    setProgress(0)
-    if (completed) {
-      setStage('keypad')
-      // Fire-and-forget audit event when keypad opens
-      logAuditEvent('parentGate.open')
-      vibrate(10)
-    }
-  }, [])
+  }, [pressing, endPress])
 
   useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current) }, [])
 

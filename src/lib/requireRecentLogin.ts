@@ -1,4 +1,4 @@
-import { auth } from '@/lib/firebase'
+import { FirebaseError } from 'firebase/app'
 import { useReauth } from '@/context/ReauthContext'
 
 // React hook helper that returns a function. When invoked around a protected action,
@@ -10,8 +10,8 @@ export function useRequireRecentLogin() {
   async function requireRecentLogin<T>(action: () => Promise<T>, emailHint?: string): Promise<T> {
     try {
       return await action()
-    } catch (e: any) {
-      const code = e?.code as string | undefined
+    } catch (e) {
+      const code = e instanceof FirebaseError ? e.code : undefined
       if (code === 'auth/requires-recent-login') {
         await showReauthModal({ emailHint })
         // Retry once after successful reauth
