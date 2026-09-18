@@ -74,12 +74,12 @@ export default function SantaPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: text, childAge, limit: 8 })
       })
-      const json = await res.json() as { ok?: boolean; results?: SantaGiftResult[] }
+      const json = await res.json() as { ok?: boolean; results?: SantaGiftResult[]; error?: string }
       if (res.ok && json.ok && Array.isArray(json.results)) {
         setResults(json.results)
       } else {
         setResults([])
-        setToast('We had a hiccup delivering your note. Please try again.')
+        setToast(res.status === 400 && json.error ? json.error : 'We had a hiccup delivering your note. Please try again.')
         setTimeout(() => setToast(''), 2200)
       }
     } catch {

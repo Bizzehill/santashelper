@@ -193,6 +193,16 @@ async function aiBackfill(client: OpenAI, query: string, limit: number): Promise
   }
 }
 
+async function isFlagged(client: OpenAI, text: string): Promise<boolean> {
+  try {
+    const resp = await client.moderations.create({ model: 'omni-moderation-latest', input: text })
+    return resp.results?.[0]?.flagged ?? false
+  } catch {
+    // If moderation itself fails, fail closed: don't forward unmoderated text.
+    return true
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json() as { query?: string; limit?: number; childAge?: number }
@@ -203,8 +213,13 @@ export async function POST(req: NextRequest) {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
+    const trimmedQuery = query.trim().slice(0, 120)
+    if (await isFlagged(openai, trimmedQuery)) {
+      return NextResponse.json({ ok: false, error: 'Please rephrase your request.' }, { status: 400 })
+    }
+
     // Light input cleaning before any external calls
-    const refined = await normalizeQuery(openai, query.trim().slice(0, 120), childAge)
+    const refined = await normalizeQuery(openai, trimmedQuery, childAge)
 
     // Retailers (server-side only)
     const [amz, wmt] = await Promise.all([
