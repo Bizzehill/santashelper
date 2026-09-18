@@ -101,6 +101,11 @@ export default function SignupPage() {
             Already have an account? Log in
           </Link>
         </div>
+        <p className="meter-text" style={{ fontSize: 13 }}>
+          By signing up, you agree to our{' '}
+          <Link className="link" href="/terms">Terms of Service</Link> and{' '}
+          <Link className="link" href="/privacy">Privacy Policy</Link>.
+        </p>
       </form>
     </section>
   )
