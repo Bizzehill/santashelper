@@ -86,3 +86,11 @@ export async function getSharedWishlist(input: { parentId: string; childId: stri
   const res = await fn(input)
   return res.data
 }
+
+// Irreversibly deletes the family's account and every piece of data tied to
+// it (children, wishlists, deeds, share links, the parent's own login).
+export async function deleteFamilyData(): Promise<{ ok: true }> {
+  const fn = httpsCallable<Record<string, never>, { ok: true }>(functions, 'deleteFamilyData')
+  const res = await fn({})
+  return res.data
+}

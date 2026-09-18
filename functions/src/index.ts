@@ -314,3 +314,6 @@ export { linkChild } from './linkChild'
 
 // Parent-only token mint + public token-checked read for the "Share List" feature.
 export { createShareLink, getSharedWishlist } from './shareLink'
+
+// Parent-initiated, irreversible deletion of a family's account and all its data.
+export { deleteFamilyData } from './deleteFamilyData'

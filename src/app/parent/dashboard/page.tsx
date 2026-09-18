@@ -6,6 +6,7 @@ import { collection, doc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
 import { useAuthWithClaims } from '@/lib/auth/useAuthWithClaims'
 import { useParentSession } from '@/hooks/useParentSession'
+import { deleteFamilyData } from '@/lib/functions'
 
 type Child = { id: string; name?: string; avatar?: string }
 
@@ -15,6 +16,10 @@ export default function ParentDashboardPage() {
   const [children, setChildren] = useState<Child[]>([])
   const [familyCode, setFamilyCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -44,6 +49,26 @@ export default function ParentDashboardPage() {
   const handleSignOut = async () => {
     endParentSession()
     await signOut(auth)
+  }
+
+  const handleDeleteEverything = async () => {
+    if (deleteConfirmText !== 'DELETE' || deleting) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteFamilyData()
+      endParentSession()
+      await signOut(auth)
+      // Hard navigation, not router.replace: signing out while still mounted
+      // under /parent's layout guard races with that layout's own redirect
+      // to /parent-gate (a "please sign in" page that's wrong to show right
+      // after the account itself was just deleted). A full page load sidesteps
+      // the race entirely.
+      window.location.href = '/'
+    } catch {
+      setDeleteError('Something went wrong deleting your data. Please try again, or contact support if it keeps happening.')
+      setDeleting(false)
+    }
   }
 
   return (
@@ -90,6 +115,51 @@ export default function ParentDashboardPage() {
       <div className="row">
         <button className="btn secondary" type="button" onClick={handleSignOut}>Sign out</button>
       </div>
+
+      <section className="card" style={{ borderColor: 'rgba(220,38,38,0.5)' }}>
+        <h3 style={{ marginTop: 0 }}>Delete my account</h3>
+        <p className="meter-text">
+          Permanently deletes your family&rsquo;s account and everything in it &mdash; every child, wishlist, deed, and
+          share link. This cannot be undone.
+        </p>
+        {!showDeleteConfirm ? (
+          <button className="btn secondary" type="button" onClick={() => setShowDeleteConfirm(true)}>
+            Delete my account and all data
+          </button>
+        ) : (
+          <div className="column" style={{ gap: 10, marginTop: 8 }}>
+            <label className="column" style={{ gap: 4 }}>
+              Type DELETE to confirm
+              <input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                disabled={deleting}
+              />
+            </label>
+            {deleteError && <div className="badge" role="alert">{deleteError}</div>}
+            <div className="row" style={{ gap: 8 }}>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleDeleteEverything}
+                disabled={deleteConfirmText !== 'DELETE' || deleting}
+                style={{ background: '#dc2626' }}
+              >
+                {deleting ? 'Deleting…' : 'Permanently delete everything'}
+              </button>
+              <button
+                className="btn secondary"
+                type="button"
+                onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError(null) }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
   )
 }
