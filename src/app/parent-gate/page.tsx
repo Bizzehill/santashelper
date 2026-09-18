@@ -37,8 +37,8 @@ export default function ParentGatePage() {
           router.replace('/parent/onboarding')
           return
         }
-        // Check parent PIN configured
-        const settingsRef = doc(db, `families/${user.uid}/settings`)
+        // Check parent PIN configured (lives directly on the family document)
+        const settingsRef = doc(db, `families/${user.uid}`)
         const settingsSnap = await getDoc(settingsRef)
         const parentPinHash = settingsSnap.exists() ? (settingsSnap.data()?.parentPinHash as string | undefined) : undefined
         if (cancelled) return
@@ -245,6 +245,10 @@ export default function ParentGatePage() {
       <section className="card">
         <h2>For grown-ups only</h2>
         <p className="meter-text">Please sign in as a parent to continue.</p>
+        <div className="row" style={{ marginTop: 12, gap: 8 }}>
+          <a className="btn" href="/login">Log in</a>
+          <a className="btn secondary" href="/signup">Sign up</a>
+        </div>
       </section>
     )
   }

@@ -1,84 +1,60 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { auth, db } from '@/lib/firebase'
+import { useEffect, useMemo, useState } from 'react'
+import { auth } from '@/lib/firebase'
 import { signInAnonymously } from 'firebase/auth'
-import { addDoc, collection, doc, getDocs, query, serverTimestamp, setDoc } from 'firebase/firestore'
 import { useChildSession } from '@/hooks/useChildSession'
 
-type Wish = { id?: string; title: string; createdAt?: any }
-type Deed = { id?: string; description: string; createdAt?: any }
-
-// Storage layout:
-// - Anonymous: users/{anonUid}/anonSanta/{wishes|deeds}
-// - Linked child session: users/{familyId}/children/{childId}/{wishlist|deeds}
-
-export function useAnonSantaWorkspace() {
+// Resolves where a kid's Santa data lives, in either of two states:
+// - "anon": trying Santa out before linking to a family. Data lives in a private
+//   scratch space scoped to their anonymous Firebase uid.
+// - "linked": already linked to a family (via /santa/link-family). Data lives in
+//   the real, parent-visible child record, and Santa's helper functions grant
+//   access to exactly that one child via a short-lived child session.
+//
+// In both states `basePath` points at a single Firestore *document* whose
+// subcollections (wishlist/deeds/affirmations) hold the actual data, so callers
+// can treat both states identically once they have basePath.
+export function useSantaAccess() {
   const { session, childSessionValid } = useChildSession()
-  const [ready, setReady] = useState(false)
+  const [uid, setUid] = useState<string | null>(auth.currentUser?.uid ?? null)
+  const [authReady, setAuthReady] = useState(false)
   const [error, setError] = useState<Error | null>(null)
 
   const linked = childSessionValid && !!session
-  const base = useMemo(() => {
-    if (linked && session) {
-      return { path: `users/${session.familyId}/children/${session.childId}`, mode: 'linked' as const }
-    }
-    const uid = auth.currentUser?.uid
-    return { path: uid ? `users/${uid}/anonSanta` : null, mode: 'anon' as const }
-  }, [linked, session])
 
   useEffect(() => {
     let cancelled = false
-    async function ensureAnon() {
+    async function ensureAuth() {
       try {
         if (!auth.currentUser) {
-          await signInAnonymously(auth)
+          const credential = await signInAnonymously(auth)
+          if (!cancelled) setUid(credential.user.uid)
+        } else if (!cancelled) {
+          setUid(auth.currentUser.uid)
         }
-        if (!cancelled) setReady(true)
-      } catch (e: any) {
+      } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)))
+      } finally {
+        if (!cancelled) setAuthReady(true)
       }
     }
-    if (!linked) ensureAnon()
-    else setReady(true)
+    ensureAuth()
     return () => { cancelled = true }
-  }, [linked])
+  }, [])
 
-  const getWishes = useCallback(async (): Promise<Wish[]> => {
-    const basePath = base.path
-    if (!basePath) return []
-    const col = linked
-      ? collection(db, `${basePath}/wishlist`)
-      : collection(db, `${basePath}/wishes`)
-    const snap = await getDocs(query(col))
-    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
-  }, [base, linked])
+  const basePath = useMemo(() => {
+    if (linked && session) return `users/${session.familyId}/children/${session.childId}`
+    return uid ? `users/${uid}/anonSanta/data` : null
+  }, [linked, session, uid])
 
-  const addWish = useCallback(async (title: string) => {
-    const basePath = base.path
-    if (!basePath || !title.trim()) return
-    const col = linked
-      ? collection(db, `${basePath}/wishlist`)
-      : collection(db, `${basePath}/wishes`)
-    await addDoc(col, { title: title.trim(), createdAt: serverTimestamp() })
-  }, [base, linked])
-
-  const getDeeds = useCallback(async (): Promise<Deed[]> => {
-    const basePath = base.path
-    if (!basePath) return []
-    const col = collection(db, `${basePath}/deeds`)
-    const snap = await getDocs(query(col))
-    return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }))
-  }, [base])
-
-  const addDeed = useCallback(async (description: string) => {
-    const basePath = base.path
-    if (!basePath || !description.trim()) return
-    const col = collection(db, `${basePath}/deeds`)
-    // In linked mode, rules allow child create; in anon mode, owned by anon uid.
-    await addDoc(col, { description: description.trim(), createdAt: serverTimestamp() })
-  }, [base])
-
-  return { ready, error, mode: base.mode, getWishes, addWish, getDeeds, addDeed }
+  return {
+    ready: authReady && !!basePath,
+    error,
+    mode: linked ? ('linked' as const) : ('anon' as const),
+    basePath,
+    familyId: linked && session ? session.familyId : null,
+    childId: linked && session ? session.childId : null,
+  }
 }
 
-export type UseAnonSantaWorkspace = ReturnType<typeof useAnonSantaWorkspace>
+export type SantaAccess = ReturnType<typeof useSantaAccess>

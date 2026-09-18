@@ -1,6 +1,6 @@
-import * as functionsV1 from 'firebase-functions/v1'
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 type FirestoreTransaction = admin.firestore.Transaction
 import * as bcrypt from 'bcryptjs'
 
@@ -24,11 +24,13 @@ export const verifyParentPin = onCall(async (request) => {
     return { ok: false, code: 'INVALID_ARGUMENT', message: 'PIN must be 4–8 digits' }
   }
 
-  const db = admin.firestore()
-  const settingsRef = db.doc(`families/${familyId}/settings`)
+  const db = getFirestore()
+  // Parent PIN + settings live directly on the family document (a fixed-name
+  // "settings" child would be a collection path in Firestore, not a document).
+  const settingsRef = db.doc(`families/${familyId}`)
   const guardRef = db.collection('families').doc(familyId).collection('private').doc('pinGuard')
 
-  const nowTs = admin.firestore.Timestamp.now()
+  const nowTs = Timestamp.now()
   const nowMs = Date.now()
 
   // Defaults
@@ -64,7 +66,7 @@ export const verifyParentPin = onCall(async (request) => {
 
     const guard = guardSnap.exists ? guardSnap.data() as any : {}
     const attemptCount: number = typeof guard.attemptCount === 'number' ? guard.attemptCount : 0
-    const lockedUntil = guard.lockedUntil as admin.firestore.Timestamp | undefined
+    const lockedUntil = guard.lockedUntil as Timestamp | undefined
 
     if (lockedUntil && lockedUntil.toMillis() > nowMs) {
       // Still locked
@@ -86,7 +88,7 @@ export const verifyParentPin = onCall(async (request) => {
     if (!match) {
       const nextAttempts = attemptCount + 1
       if (nextAttempts >= MAX_ATTEMPTS) {
-        const until = admin.firestore.Timestamp.fromMillis(nowMs + LOCK_MINUTES * 60 * 1000)
+        const until = Timestamp.fromMillis(nowMs + LOCK_MINUTES * 60 * 1000)
         tx.set(guardRef, { attemptCount: 0, lockedUntil: until, lastAttemptAt: nowTs }, { merge: true })
         return {
           ok: false,
@@ -122,14 +124,14 @@ export const verifyParentPin = onCall(async (request) => {
   // Lightweight audit logging (PII-safe): write event(s) with 30d TTL
   try {
     const ttlMs = 30 * 24 * 60 * 60 * 1000
-    const expireAt = admin.firestore.Timestamp.fromMillis(Date.now() + ttlMs)
+    const expireAt = Timestamp.fromMillis(Date.now() + ttlMs)
     const batch = db.batch()
     for (const evt of result._audit || []) {
       const docRef = db.collection('families').doc(familyId).collection('audit').doc()
       batch.set(docRef, {
         event: evt.event,
         meta: evt.meta || {},
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         expireAt,
         source: 'callable',
       })
@@ -167,9 +169,9 @@ export const setParentPin = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'TTL must be between 5 and 60 minutes')
   }
 
-  const dbi = admin.firestore()
+  const dbi = getFirestore()
   const familyId = callerUid
-  const settingsRef = dbi.doc(`families/${familyId}/settings`)
+  const settingsRef = dbi.doc(`families/${familyId}`)
 
   try {
     await dbi.runTransaction(async (tx: FirestoreTransaction) => {
@@ -180,7 +182,7 @@ export const setParentPin = onCall(async (request) => {
       const payload: any = {
         parentPinHash: hash,
         pinStatus: 'set',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         updatedBy: callerUid,
       }
       if (ttlMinutes !== undefined) payload.parentSessionTTLMinutes = ttlMinutes
@@ -217,10 +219,10 @@ export const setParentRole = onCall(async (request) => {
     // Set role=parent, preserving any other custom claims
     await admin.auth().setCustomUserClaims(uid, { ...existing, role: 'parent' })
     // Mirror into Firestore user doc; clients cannot write role directly (enforced in rules)
-    await admin.firestore().collection('users').doc(uid).set(
+    await getFirestore().collection('users').doc(uid).set(
       {
         role: 'parent',
-        roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        roleUpdatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     )
@@ -230,79 +232,6 @@ export const setParentRole = onCall(async (request) => {
   } catch (e: any) {
     console.error('setParentRole error', e)
     throw new HttpsError('internal', e?.message || 'Failed to set parent role')
-  }
-})
-
-// Seed family settings on first sign-in. Ensures families/{uid}/settings exists with pinStatus: 'unset'.
-export const authOnCreate = functionsV1.auth.user().onCreate(async (user) => {
-  try {
-    const dbi = admin.firestore()
-    const uid = user.uid
-    const settingsRef = dbi.doc(`families/${uid}/settings`)
-    const snap = await settingsRef.get()
-    if (snap.exists) return
-    await settingsRef.create({
-      pinStatus: 'unset',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdBy: uid,
-    })
-  } catch (e: any) {
-    // If already exists, treat as success; otherwise log for observability
-    if (e?.code !== 'already-exists') {
-      console.error('authOnCreate seed settings failed', e)
-    }
-  }
-})
-
-export const ensureFamilySettings = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError('unauthenticated', 'Authentication required')
-  }
-  const uid = request.auth.uid
-  const dbi = admin.firestore()
-  const settingsRef = dbi.doc(`families/${uid}/settings`)
-  try {
-    const snap = await settingsRef.get()
-    if (snap.exists) return { ok: true, existed: true }
-    await settingsRef.create({
-      pinStatus: 'unset',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      createdBy: uid,
-    })
-    return { ok: true, existed: false }
-  } catch (e: any) {
-    // Treat already-exists as success
-    if (e?.code === 'already-exists') return { ok: true, existed: true }
-    console.error('ensureFamilySettings failed', e)
-    throw new HttpsError('internal', 'Failed to ensure settings')
-  }
-})
-
-// Allow a newly created user to register as a parent for their own family.
-export const registerParent = onCall(async (request) => {
-  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
-  const uid = request.auth.uid
-  try {
-    // If already has role parent, treat as success
-    const userRecord = await admin.auth().getUser(uid)
-    const existingClaims = (userRecord.customClaims || {}) as Record<string, unknown>
-    if (existingClaims['role'] === 'parent') return { ok: true }
-    // Set role=parent
-    await admin.auth().setCustomUserClaims(uid, { ...existingClaims, role: 'parent' })
-    // Mirror into users doc and seed settings
-    const dbi = admin.firestore()
-    await dbi.collection('users').doc(uid).set({ role: 'parent', roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
-    const settingsRef = dbi.doc(`families/${uid}/settings`)
-    const snap = await settingsRef.get()
-    if (!snap.exists) {
-      await settingsRef.create({ pinStatus: 'unset', createdAt: admin.firestore.FieldValue.serverTimestamp(), createdBy: uid })
-    }
-    // Force token refresh
-    await admin.auth().revokeRefreshTokens(uid)
-    return { ok: true }
-  } catch (e: any) {
-    console.error('registerParent error', e)
-    throw new HttpsError('internal', 'Failed to register parent')
   }
 })
 
@@ -317,7 +246,7 @@ export const setChildPin = onCall(async (request) => {
   const pin: string = (data?.pin as string | undefined)?.trim() || ''
   if (!childId) throw new HttpsError('invalid-argument', 'childId is required')
   if (!/^[0-9]{4,6}$/.test(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4–6 digits')
-  const dbi = admin.firestore()
+  const dbi = getFirestore()
   const childRef = dbi.doc(`users/${uid}/children/${childId}`)
   try {
     await dbi.runTransaction(async (tx: FirestoreTransaction) => {
@@ -325,7 +254,7 @@ export const setChildPin = onCall(async (request) => {
       const existing = snap.exists ? (snap.data() as any) : {}
   if (existing.childPinHash) throw new HttpsError('already-exists', 'Child PIN already set')
       const hash = await bcrypt.hash(pin, 10)
-      tx.set(childRef, { childPinHash: hash, childPinStatus: 'set', updatedAt: admin.firestore.FieldValue.serverTimestamp(), updatedBy: uid }, { merge: true })
+      tx.set(childRef, { childPinHash: hash, childPinStatus: 'set', updatedAt: FieldValue.serverTimestamp(), updatedBy: uid }, { merge: true })
     })
     return { ok: true }
   } catch (e: any) {
@@ -344,7 +273,7 @@ export const verifyChildPin = onCall(async (request) => {
   const pin: string = (data?.pin as string | undefined)?.trim() || ''
   if (!familyId || !childId) throw new HttpsError('invalid-argument', 'familyId and childId required')
   if (!/^[0-9]{4,6}$/.test(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4–6 digits')
-  const dbi = admin.firestore()
+  const dbi = getFirestore()
   const childRef = dbi.doc(`users/${familyId}/children/${childId}`)
   try {
     const snap = await childRef.get()
@@ -359,8 +288,8 @@ export const verifyChildPin = onCall(async (request) => {
     const sessionRef = dbi.doc(`families/${familyId}/childSessions/${callerUid}`)
     await sessionRef.set({
       allowedChildId: childId,
-      expireAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      expireAt: Timestamp.fromMillis(expiresAtMs),
+      createdAt: FieldValue.serverTimestamp(),
     }, { merge: true })
     return { ok: true, expiresAtEpochMs: expiresAtMs }
   } catch (e: any) {
@@ -380,3 +309,6 @@ export { addOrUpdateChild } from './addOrUpdateChild'
 // - pin: child's PIN
 // On success: migrates anon data (if any) and creates a child session for caller.
 export { linkChild } from './linkChild'
+
+// Parent-only token mint + public token-checked read for the "Share List" feature.
+export { createShareLink, getSharedWishlist } from './shareLink'

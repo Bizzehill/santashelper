@@ -65,6 +65,7 @@ input,select,textarea{padding:10px;border-radius:10px;border:1px solid rgba(51,6
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .row{display:flex;gap:12px;align-items:center}
 .row.between{justify-content:space-between}
+.column{display:flex;flex-direction:column;gap:12px}
 .list{list-style:none;padding:0;margin:0}
 .list-item{display:flex;align-items:center;justify-content:space-between;padding:10px;border-bottom:1px solid #23314f}
 .badge{padding:4px 8px;border-radius:999px;background:#334155}

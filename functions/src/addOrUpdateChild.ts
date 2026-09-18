@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as bcrypt from 'bcryptjs'
 
 if (!admin.apps.length) admin.initializeApp()
@@ -18,7 +19,7 @@ export const addOrUpdateChild = onCall(async (request) => {
   if (!name) throw new HttpsError('invalid-argument', 'name is required')
   if (!/^[0-9]{4,6}$/.test(pin)) throw new HttpsError('invalid-argument', 'PIN must be 4–6 digits')
 
-  const db = admin.firestore()
+  const db = getFirestore()
   const childrenCol = db.collection(`users/${uid}/children`)
 
   try {
@@ -32,7 +33,7 @@ export const addOrUpdateChild = onCall(async (request) => {
         avatar,
         childPinHash: hash,
         childPinStatus: 'set',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         updatedBy: uid,
       }, { merge: true })
       return { childId }
@@ -49,7 +50,7 @@ export const addOrUpdateChild = onCall(async (request) => {
         avatar,
         childPinHash: hash,
         childPinStatus: 'set',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         updatedBy: uid,
       }, { merge: true })
       return { childId: existingRef.id }
@@ -64,7 +65,7 @@ export const addOrUpdateChild = onCall(async (request) => {
       avatar,
       childPinHash: hash,
       childPinStatus: 'set',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
       createdBy: uid,
     }
     await ref.set(payload, { merge: true })

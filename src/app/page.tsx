@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import Link from 'next/link'
 import FeatureIcon from '@/components/FeatureIcon'
 import Section from '@/components/Section'
 
@@ -23,8 +24,8 @@ export default function Page() {
           <h1 className="hero-title text-2xl font-bold">Welcome to Santa’s Workshop Online</h1>
           <p className="hero-sub text-lg leading-relaxed">where kids and parents bring Christmas magic to life together!</p>
           <div className="cta-row mt-2">
-            <a className="btn" href="/santa">Enter Santa View</a>
-            <a className="btn secondary" href="/parent/dashboard">Parent Dashboard</a>
+            <Link className="btn" href="/santa">Enter Santa View</Link>
+            <Link className="btn secondary" href="/parent/dashboard">Parent Dashboard</Link>
           </div>
         </div>
         <div className="hero-elf" aria-hidden="true">

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as bcrypt from 'bcryptjs'
 import { migrateAnonSantaData } from './migrateAnonSantaData'
 
@@ -16,12 +17,21 @@ export const linkChild = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'familyCode, childName and 4–6 digit pin are required')
   }
 
-  const db = admin.firestore()
-  // Look up family by code (for now, treat familyCode as familyId; otherwise query families by familyCode)
+  const db = getFirestore()
+  // Resolve the friendly family code (e.g. "XT7K9M", shown on the parent dashboard)
+  // to the underlying family/parent uid. Also accept a raw uid directly, in case an
+  // older link predates family codes.
   let familyId: string | null = null
-  // Simple path for now: familyCode === familyId
-  familyId = familyCode
-  const settingsRef = db.doc(`families/${familyId}/settings`)
+  const byCode = await db.collection('families').where('familyCode', '==', familyCode.toUpperCase()).limit(1).get()
+  if (!byCode.empty) {
+    familyId = byCode.docs[0].id
+  } else {
+    const directSnap = await db.doc(`families/${familyCode}`).get()
+    if (directSnap.exists) familyId = familyCode
+  }
+  if (!familyId) return { ok: false, code: 'INVALID_CODE' as const }
+
+  const settingsRef = db.doc(`families/${familyId}`)
   const settingsSnap = await settingsRef.get()
   if (!settingsSnap.exists) return { ok: false, code: 'INVALID_CODE' as const }
 
@@ -48,7 +58,7 @@ export const linkChild = onCall(async (request) => {
 
   // Update user to linked child role and mirror family link
   const userRef = db.doc(`users/${callerUid}`)
-  await userRef.set({ role: 'child_linked', familyId, childId, roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+  await userRef.set({ role: 'child_linked', familyId, childId, roleUpdatedAt: FieldValue.serverTimestamp() }, { merge: true })
   // Optionally set auth custom claims (kept minimal; role can be mirrored by server-only logic)
   try {
     const rec = await admin.auth().getUser(callerUid)
@@ -62,7 +72,7 @@ export const linkChild = onCall(async (request) => {
   }
 
   // Mark child as linked to this uid
-  await childDoc.ref.set({ linkedUID: callerUid, linkedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true })
+  await childDoc.ref.set({ linkedUID: callerUid, linkedAt: FieldValue.serverTimestamp() }, { merge: true })
 
   // Migrate anon data (best-effort)
   try {
@@ -76,8 +86,8 @@ export const linkChild = onCall(async (request) => {
   const expiresAtMs = Date.now() + ttlMinutes * 60 * 1000
   await sessionRef.set({
     allowedChildId: childId,
-    expireAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    expireAt: Timestamp.fromMillis(expiresAtMs),
+    createdAt: FieldValue.serverTimestamp(),
   }, { merge: true })
 
   return { ok: true as const, familyId, childId, expiresAtEpochMs: expiresAtMs }

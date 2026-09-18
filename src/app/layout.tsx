@@ -1,6 +1,5 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { AuthProvider } from '@/context/AuthContext'
 import { ReauthProvider } from '@/context/ReauthContext'
 import Header from '@/components/HeaderAppShell'
 
@@ -14,13 +13,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AuthProvider>
-          <ReauthProvider>
-            <Header />
-            <main className="container">{children}</main>
-            <footer className="site-footer">Made with love and stewardship.</footer>
-          </ReauthProvider>
-        </AuthProvider>
+        <ReauthProvider>
+          <Header />
+          <main className="container">{children}</main>
+          <footer className="site-footer">Made with love and stewardship.</footer>
+        </ReauthProvider>
       </body>
     </html>
   )

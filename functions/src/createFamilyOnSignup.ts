@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
 import * as admin from 'firebase-admin'
+import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 
 if (!admin.apps.length) admin.initializeApp()
 
@@ -17,28 +18,25 @@ export const createFamilyOnSignup = onCall(async (request) => {
   const asParent: boolean = request.data?.asParent !== false // default true
   if (!asParent) throw new HttpsError('invalid-argument', 'Only parent onboarding is supported')
   const uid = request.auth.uid
-  const db = admin.firestore()
+  const db = getFirestore()
 
   const userRef = db.doc(`users/${uid}`)
-  const familyId = uid // keep compatibility with existing code expecting familyId === parent uid
+  const familyId = uid
+  // The parent PIN and its settings live directly on this document, alongside
+  // familyCode/parentUIDs -- a fixed-name "settings" child would be a Firestore
+  // *collection* path, not a document, so it can never be read or written.
   const familyRef = db.doc(`families/${familyId}`)
-  const settingsRef = db.doc(`families/${familyId}/settings`)
 
-  // Read current state
-  const [userSnap, familySnap, settingsSnap] = await Promise.all([
-    userRef.get(),
-    familyRef.get(),
-    settingsRef.get(),
-  ])
+  const [familySnap] = await Promise.all([familyRef.get()])
 
-  // Ensure family doc exists with a code and parentUIDs
   let familyCode: string | undefined = familySnap.exists ? (familySnap.data() as any)?.familyCode : undefined
   if (!familySnap.exists) {
     familyCode = genFamilyCode()
     await familyRef.set({
       familyCode,
       parentUIDs: [uid],
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      pinStatus: 'unset',
+      createdAt: FieldValue.serverTimestamp(),
       createdBy: uid,
     }, { merge: true })
   } else {
@@ -48,22 +46,17 @@ export const createFamilyOnSignup = onCall(async (request) => {
     if (!Array.isArray(data?.parentUIDs) || !data.parentUIDs.includes(uid)) {
       updates.parentUIDs = Array.isArray(data?.parentUIDs) ? Array.from(new Set([...(data.parentUIDs as string[]), uid])) : [uid]
     }
+    if (!data?.pinStatus) updates.pinStatus = 'unset'
     if (Object.keys(updates).length) {
       await familyRef.set(updates, { merge: true })
     }
     if (!familyCode) familyCode = (await familyRef.get()).data()?.familyCode
   }
 
-  // Ensure settings doc exists with pinStatus: 'unset'
-  if (!settingsSnap.exists) {
-    await settingsRef.set({ pinStatus: 'unset', createdAt: admin.firestore.FieldValue.serverTimestamp(), createdBy: uid }, { merge: true })
-  }
-
-  // Ensure user doc has role and familyId
   const userUpdates: any = {
     role: 'parent',
     familyId,
-    roleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    roleUpdatedAt: FieldValue.serverTimestamp(),
   }
   await userRef.set(userUpdates, { merge: true })
 

@@ -1,22 +1,21 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import Link from 'next/link'
 import { db } from '@/lib/firebase'
-import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { addDoc, collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore'
+import { useSantaAccess } from '@/lib/child/useAnonSantaWorkspace'
 import WishItemCard, { WishItem } from '@/components/WishItemCard'
 import SantaChatCard from '@/components/SantaChatCard'
 
-type Child = { id: string; name?: string }
 type SantaGiftResult = { title: string; image: string | null; url: string | null; retailer: 'amazon'|'walmart'|'ai'; hasPrice: boolean }
 
 export default function SantaPage() {
-  const { user } = useAuth()
-  const [children, setChildren] = useState<Child[]>([])
-  const [childId, setChildId] = useState<string>('')
-  const [wishlist, setWishlist] = useState<WishItem[]>([])
+  const { ready, mode, basePath } = useSantaAccess()
+  const [childName, setChildName] = useState<string | null>(null)
   const [childAge, setChildAge] = useState<number | undefined>(undefined)
+  const [wishlist, setWishlist] = useState<WishItem[]>([])
   const [noteText, setNoteText] = useState<string>('')
-  const [mode, setMode] = useState<'gifts'|'deeds'>('gifts')
+  const [modeTab, setModeTab] = useState<'gifts'|'deeds'>('gifts')
   const [searching, setSearching] = useState(false)
   const [reading, setReading] = useState(false)
   const [results, setResults] = useState<SantaGiftResult[] | null>(null)
@@ -29,67 +28,43 @@ export default function SantaPage() {
     'That’s the spirit!'
   ]
   const affirmCache = useRef<{ text: string; message: string; at: number } | null>(null)
-  const [lastAffirmation, setLastAffirmation] = useState<string | null>(null)
-  const [lastAffirmationAt, setLastAffirmationAt] = useState<Date | null>(null)
   const [history, setHistory] = useState<Array<{ text: string; createdAtDate: Date | null }>>([])
+  const lastAffirmation = history[0]?.text ?? null
+  const lastAffirmationAt = history[0]?.createdAtDate ?? null
 
-  const formatUpdatedAt = (d: Date) => d.toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-  })
-  
-
-  // Load children for user
+  // Fetch child name (linked mode only -- anon scratch space has no profile doc)
   useEffect(() => {
-    if (!user) return
-    const ref = collection(db, 'users', user.uid, 'children')
-    const unsub = onSnapshot(ref, snap => {
-      const list: Child[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Child>) }))
-      setChildren(list)
-      if (!childId && list[0]) setChildId(list[0].id)
+    if (!ready || !basePath || mode !== 'linked') { setChildName(null); return }
+    const unsub = onSnapshot(doc(db, basePath), (snap) => {
+      const data = snap.data() as { name?: string; age?: number } | undefined
+      setChildName(data?.name ?? null)
+      setChildAge(typeof data?.age === 'number' ? data.age : undefined)
     })
     return () => unsub()
-  }, [user, childId])
+  }, [ready, basePath, mode])
 
-  // Subscribe to last 10 affirmations for selected child
+  // Wishlist + Santa's reply history
   useEffect(() => {
-    if (!user || !childId) return
-    const affRef = collection(db, 'users', user.uid, 'children', childId, 'affirmations')
-    const qy = query(affRef, orderBy('createdAt', 'desc'), limit(10))
-    const unsub = onSnapshot(qy, snap => {
-      const rows = snap.docs.map(d => {
+    if (!ready || !basePath) return
+    const unsubWishlist = onSnapshot(
+      query(collection(db, `${basePath}/wishlist`), orderBy('createdAt', 'desc')),
+      (snap) => setWishlist(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Partial<WishItem>) })) as WishItem[])
+    )
+    const unsubHistory = onSnapshot(
+      query(collection(db, `${basePath}/affirmations`), orderBy('createdAt', 'desc'), limit(10)),
+      (snap) => setHistory(snap.docs.map((d) => {
         const data = d.data() as { text?: string; createdAt?: { toDate?: () => Date } }
         return {
           text: (data.text || '').toString(),
-          createdAtDate: typeof data.createdAt?.toDate === 'function' ? data.createdAt!.toDate() : null
+          createdAtDate: typeof data.createdAt?.toDate === 'function' ? data.createdAt!.toDate() : null,
         }
-      })
-      setHistory(rows)
-    })
-    return () => unsub()
-  }, [user, childId])
+      }))
+    )
+    return () => { unsubWishlist(); unsubHistory() }
+  }, [ready, basePath])
 
-  // Load settings & wishlist for selected child
-  useEffect(() => {
-    if (!user || !childId) return
-    const cRef = doc(db, 'users', user.uid, 'children', childId)
-    const unsubC = onSnapshot(cRef, d => {
-      const data = (d.data() as { age?: number; lastAffirmation?: string | null; lastAffirmationAt?: any } | undefined)
-      setChildAge(typeof data?.age === 'number' ? data!.age : undefined)
-      const msg = (data?.lastAffirmation ?? null)
-      setLastAffirmation(typeof msg === 'string' && msg.trim() ? msg : null)
-      const at = data?.lastAffirmationAt as { toDate?: () => Date } | undefined
-      setLastAffirmationAt(typeof at?.toDate === 'function' ? at!.toDate() : null)
-    })
-    const wRef = query(collection(db, 'users', user.uid, 'children', childId, 'wishlist'), orderBy('createdAt','desc'))
-    const unsubW = onSnapshot(wRef, snap => {
-      setWishlist(snap.docs.map(d=>({ id: d.id, ...(d.data() as Partial<WishItem>) })) as WishItem[])
-    })
-    return () => { unsubC(); unsubW() }
-  }, [user, childId])
-
-  // Submit handlers by mode
   const onSubmitGifts = async (text: string) => {
-    if (!user || !childId) return
+    if (!basePath) return
     setSearching(true)
     setResults(null)
     setToast('')
@@ -105,21 +80,20 @@ export default function SantaPage() {
       } else {
         setResults([])
         setToast('We had a hiccup delivering your note. Please try again.')
-        setTimeout(()=> setToast(''), 2200)
+        setTimeout(() => setToast(''), 2200)
       }
-    } catch (e) {
+    } catch {
       setToast('We had a hiccup delivering your note. Please try again.')
-      setTimeout(()=> setToast(''), 2200)
+      setTimeout(() => setToast(''), 2200)
     } finally {
       setSearching(false)
     }
   }
 
   const onSubmitDeed = async (text: string) => {
-    if (!user || !childId) return
+    if (!basePath) return
     try {
       setReading(true)
-      // Optional moderation step
       const modRes = await fetch('/api/moderate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,20 +103,20 @@ export default function SantaPage() {
         const modJson = await modRes.json() as { flagged?: boolean }
         if (modJson.flagged) {
           setToast('Please rephrase.')
-          setTimeout(()=> setToast(''), 2200)
+          setTimeout(() => setToast(''), 2200)
           setReading(false)
           return
         }
       }
 
-      const deedsCol = collection(db, 'users', user.uid, 'children', childId, 'deeds')
+      const deedsCol = collection(db, `${basePath}/deeds`)
       const docRef = await addDoc(deedsCol, {
         description: text,
         status: 'noted',
         source: 'santa-note',
         createdAt: serverTimestamp(),
       })
-      // Affirmation: attempt API with simple cache (1 minute)
+
       let santaMsg: string | null = null
       const now = Date.now()
       if (affirmCache.current && affirmCache.current.text === text && (now - affirmCache.current.at) < 60_000) {
@@ -166,44 +140,34 @@ export default function SantaPage() {
       }
 
       if (!santaMsg) {
-        const aff = affirmations[Math.floor(Math.random()*affirmations.length)]
+        const aff = affirmations[Math.floor(Math.random() * affirmations.length)]
         santaMsg = `Santa read your note! 🎅 ${aff}`
       }
-      // Persist the message on the child doc; if it fails, still show locally
-      setLastAffirmation(santaMsg)
-      setLastAffirmationAt(new Date())
       try {
-        await updateDoc(doc(db, 'users', user.uid, 'children', childId), {
-          lastAffirmation: santaMsg,
-          lastAffirmationAt: serverTimestamp(),
-        })
-        // Optional history append (simple, last 10 read)
-        await addDoc(collection(db, 'users', user.uid, 'children', childId, 'affirmations'), {
+        await addDoc(collection(db, `${basePath}/affirmations`), {
           text: santaMsg,
           createdAt: serverTimestamp(),
         })
       } catch (e) {
-        // Keep local state; next deed submit can try again
-        console.warn('[santa] failed to persist affirmation', e)
+        console.warn('[santa] failed to save affirmation', e)
       }
-      // Clear any temporary loading toast
       setToast('')
       setUndo({ type: 'deed', id: docRef.id })
       if (undoTimeout.current) clearTimeout(undoTimeout.current)
       undoTimeout.current = setTimeout(() => { setUndo(null); setToast('') }, 5000)
       setNoteText('')
-    } catch (e) {
+    } catch {
       setToast('We couldn’t save that this time. Please try again.')
-      setTimeout(()=> setToast(''), 2200)
+      setTimeout(() => setToast(''), 2200)
     } finally {
       setReading(false)
     }
   }
 
   const addResultToList = async (r: SantaGiftResult) => {
-    if (!user || !childId) return
+    if (!basePath) return
     try {
-      const ref = collection(db, 'users', user.uid, 'children', childId, 'wishlist')
+      const ref = collection(db, `${basePath}/wishlist`)
       const docRef = await addDoc(ref, {
         name: r.title,
         url: r.url ?? null,
@@ -219,80 +183,83 @@ export default function SantaPage() {
       undoTimeout.current = setTimeout(() => { setUndo(null); setToast('') }, 5000)
     } catch (e) {
       setToast(e instanceof Error ? e.message : 'Could not add to list')
-      setTimeout(()=> setToast(''), 2200)
+      setTimeout(() => setToast(''), 2200)
     }
   }
 
   const undoAdd = async () => {
-    if (!user || !childId || !undo) return
+    if (!basePath || !undo) return
     try {
-      if (undo.type === 'wishlist') {
-        await deleteDoc(doc(db, 'users', user.uid, 'children', childId, 'wishlist', undo.id))
-      } else {
-        await deleteDoc(doc(db, 'users', user.uid, 'children', childId, 'deeds', undo.id))
-      }
+      const col = undo.type === 'wishlist' ? 'wishlist' : 'deeds'
+      await deleteDoc(doc(db, `${basePath}/${col}`, undo.id))
       setToast('Removed.')
-      setTimeout(()=> setToast(''), 1200)
-    } catch (e) {
+      setTimeout(() => setToast(''), 1200)
+    } catch {
       setToast('Could not remove item.')
-      setTimeout(()=> setToast(''), 1800)
+      setTimeout(() => setToast(''), 1800)
     } finally {
       setUndo(null)
       if (undoTimeout.current) { clearTimeout(undoTimeout.current); undoTimeout.current = null }
     }
   }
-  
+
+  if (!ready) {
+    return (
+      <div className="santa-bg">
+        <section className="santa-page">
+          <section className="card" aria-busy="true" aria-live="polite">
+            <p className="meter-text" style={{ margin: 0 }}>Getting the workshop ready…</p>
+          </section>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="santa-bg">
-      {!user ? (
-        <section className="santa-page">
-          <section className="card">
-            <h2>Santa View</h2>
-           <p>To protect your family&#39;s privacy, please <a className="link" href="/login">sign in</a> first.</p>
-          </section>
-        </section>
-      ) : (
       <section className="santa-page">
-      <h2>Santa View ✨</h2>
-      <label>
-        Choose child:
-        <select value={childId} onChange={e=>setChildId(e.target.value)}>
-          {children.map(c=> <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}
-        </select>
-      </label>
+        <h2>Santa View ✨</h2>
 
-  <div className="card" aria-labelledby="santa-note-heading">
-        <h3 id="santa-note-heading">Santa Note</h3>
-        {/* Chat-style pinned reply at top */}
-        <SantaChatCard
-          lastAffirmation={lastAffirmation}
-          lastAffirmationAt={lastAffirmationAt}
-          history={history}
-          mode={mode}
-          onModeChange={setMode}
-          noteText={noteText}
-          onChangeNote={setNoteText}
-          onSubmitGifts={onSubmitGifts}
-          onSubmitDeed={onSubmitDeed}
-          searching={searching}
-          reading={reading}
-          giftResults={results}
-          onAddGift={addResultToList}
-          toast={toast}
-          undoAvailable={!!undo}
-          onUndo={undoAdd}
-          canSubmit={!!childId}
-        />
-        {/* Input, mode pills, loaders, toast, and gift results are rendered inside SantaChatCard */}
-      </div>
+        {mode === 'anon' ? (
+          <div className="card">
+            <p className="meter-text" style={{ margin: 0 }}>
+              You&rsquo;re trying Santa&rsquo;s Helper as a guest. <Link className="link" href="/santa/link-family">Link your family</Link> to save your wishes and deeds for real, and let a parent see them.
+            </p>
+          </div>
+        ) : (
+          <div className="card">
+            <p className="meter-text" style={{ margin: 0 }}>Hi {childName || 'there'}! Linked to your family. 🎄</p>
+          </div>
+        )}
 
-      <h3>My Wish List</h3>
-      <div className="grid3">
-        {wishlist.map(w=> <WishItemCard key={w.id} item={w} />)}
-      </div>
+        <div className="card" aria-labelledby="santa-note-heading">
+          <h3 id="santa-note-heading">Santa Note</h3>
+          <SantaChatCard
+            lastAffirmation={lastAffirmation}
+            lastAffirmationAt={lastAffirmationAt}
+            history={history}
+            mode={modeTab}
+            onModeChange={setModeTab}
+            noteText={noteText}
+            onChangeNote={setNoteText}
+            onSubmitGifts={onSubmitGifts}
+            onSubmitDeed={onSubmitDeed}
+            searching={searching}
+            reading={reading}
+            giftResults={results}
+            onAddGift={addResultToList}
+            toast={toast}
+            undoAvailable={!!undo}
+            onUndo={undoAdd}
+            canSubmit={!!basePath}
+          />
+        </div>
+
+        <h3>My Wish List</h3>
+        <div className="grid3">
+          {wishlist.map((w) => <WishItemCard key={w.id} item={w} />)}
+        </div>
       </section>
-      )}
     </div>
   )
 }

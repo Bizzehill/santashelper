@@ -28,3 +28,9 @@ yarn-error.log*
 out/
 .vercel/
 **/*.tsbuildinfo
+
+# Firebase emulators
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/

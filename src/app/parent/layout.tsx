@@ -1,17 +1,22 @@
 'use client'
 import React, { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuthWithClaims } from '@/lib/auth/useAuthWithClaims'
+import { useParentSession } from '@/hooks/useParentSession'
 import { db } from '@/lib/firebase'
-import { collection } from 'firebase/firestore'
-import { getCountFromServer } from 'firebase/firestore'
+import { collection, getCountFromServer } from 'firebase/firestore'
 
 export default function ParentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, claims, loading } = useAuthWithClaims()
+  const { parentSessionValid } = useParentSession()
   const [checking, setChecking] = useState(true)
 
   const role = useMemo(() => (claims?.role as string | undefined) || undefined, [claims])
+  // Onboarding must stay reachable for a brand-new parent who has no PIN set yet --
+  // the PIN gate itself sends first-timers here, so it can't also block the door.
+  const isOnboarding = pathname === '/parent/onboarding'
 
   useEffect(() => {
     let cancelled = false
@@ -21,25 +26,32 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
         router.replace('/parent-gate')
         return
       }
+      // Every /parent/* page except onboarding requires a fresh PIN entry, not just
+      // a signed-in parent account -- otherwise the PIN gate can be skipped entirely
+      // by navigating straight to a URL like /parent/dashboard.
+      if (!isOnboarding && !parentSessionValid) {
+        router.replace('/parent-gate')
+        return
+      }
       // Parent: check if any children exist
       try {
         const childrenCol = collection(db, `users/${user.uid}/children`)
         const snapshot = await getCountFromServer(childrenCol)
         const count = snapshot.data().count || 0
         if (cancelled) return
-        if (count === 0) {
+        if (count === 0 && !isOnboarding) {
           router.replace('/parent/onboarding')
           return
         }
-      } catch (e) {
-        // On failure, be conservative and stay; optionally you could log
+      } catch {
+        // On failure, be conservative and stay put rather than bounce the user.
       } finally {
         if (!cancelled) setChecking(false)
       }
     }
     run()
     return () => { cancelled = true }
-  }, [loading, user, role, router])
+  }, [loading, user, role, parentSessionValid, isOnboarding, router])
 
   if (loading || checking) {
     return (
@@ -51,6 +63,5 @@ export default function ParentLayout({ children }: { children: React.ReactNode }
     )
   }
 
-  // Parent with at least one child: render content
   return <>{children}</>
 }

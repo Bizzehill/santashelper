@@ -1,9 +1,6 @@
 'use client'
-import { getApp } from 'firebase/app'
-import { getFunctions, httpsCallable } from 'firebase/functions'
-
-const app = getApp()
-const functions = getFunctions(app)
+import { httpsCallable } from 'firebase/functions'
+import { functions } from '@/lib/firebase'
 
 export async function verifyParentPin(pin: string, familyId?: string): Promise<{
   ok: boolean
@@ -31,16 +28,12 @@ export async function setParentPin(pin: string, opts?: { ttlMinutes?: number; fa
   return res.data as any
 }
 
-export async function ensureFamilySettings(): Promise<{ ok: true; existed?: boolean }>{
-  const fn = httpsCallable(functions, 'ensureFamilySettings')
-  const res = await fn({})
-  return res.data as any
-}
-
-export async function registerParent(): Promise<{ ok: true }>{
-  const fn = httpsCallable(functions, 'registerParent')
-  const res = await fn({})
-  return res.data as any
+// Called once right after a new parent account is created. Grants the role=parent
+// custom claim, generates the family's shareable code, and seeds settings.
+export async function createFamilyOnSignup(): Promise<{ familyId: string; familyCode?: string }>{
+  const fn = httpsCallable(functions, 'createFamilyOnSignup')
+  const res = await fn({ asParent: true })
+  return res.data as unknown as { familyId: string; familyCode?: string }
 }
 
 export async function setChildPin(childId: string, pin: string): Promise<{ ok: true }>{
@@ -72,4 +65,23 @@ export async function linkChild(input: { familyCode: string; childName: string; 
   const fn = httpsCallable(functions, 'linkChild')
   const res = await fn(input)
   return res.data as any
+}
+
+export async function createShareLink(childId: string): Promise<{ ok: true; token: string; parentId: string; childId: string }>{
+  const fn = httpsCallable(functions, 'createShareLink')
+  const res = await fn({ childId })
+  return res.data as unknown as { ok: true; token: string; parentId: string; childId: string }
+}
+
+export type SharedWishlistItem = { id: string; name: string; description: string | null; url: string | null; image: string | null }
+
+export async function getSharedWishlist(input: { parentId: string; childId: string; token: string }): Promise<
+  | { ok: true; childName: string; items: SharedWishlistItem[] }
+  | { ok: false; error: 'MISSING_PARAMS' | 'NOT_FOUND' | 'INVALID_TOKEN' }
+>{
+  const fn = httpsCallable(functions, 'getSharedWishlist')
+  const res = await fn(input)
+  return res.data as unknown as
+    | { ok: true; childName: string; items: SharedWishlistItem[] }
+    | { ok: false; error: 'MISSING_PARAMS' | 'NOT_FOUND' | 'INVALID_TOKEN' }
 }

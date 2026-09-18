@@ -1,7 +1,10 @@
 'use client'
 import { getApps, initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions'
+
+const useEmulator = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === 'true'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -15,3 +18,16 @@ const firebaseConfig = {
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+export const functions = getFunctions(app)
+
+// Point the client SDKs at the local Firebase Emulator Suite (see the "npm run
+// emulators" script) instead of the real project. Never touches production data.
+if (useEmulator) {
+  const g = globalThis as unknown as { __firebaseEmulatorsConnected?: boolean }
+  if (!g.__firebaseEmulatorsConnected) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+    connectFirestoreEmulator(db, '127.0.0.1', 8080)
+    connectFunctionsEmulator(functions, '127.0.0.1', 5001)
+    g.__firebaseEmulatorsConnected = true
+  }
+}

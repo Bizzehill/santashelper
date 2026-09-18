@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers ----
+    function isParent() { return request.auth != null && request.auth.token.role == 'parent' }
+    function isParentOwner(userId) { return isParent() && request.auth.uid == userId }
+
+    // A "child session" is created server-side (linkChild function) once a kid proves
+    // their family code + name + PIN. It's short-lived and scoped to exactly one child.
+    function hasChildSession(userId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/families/$(userId)/childSessions/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/families/$(userId)/childSessions/$(request.auth.uid)).data.expireAt > request.time
+    }
+    function allowedChild(userId, childId) {
+      return hasChildSession(userId) &&
+        get(/databases/$(database)/documents/families/$(userId)/childSessions/$(request.auth.uid)).data.allowedChildId == childId
+    }
+
+    // ---- Families: parent PIN + settings, audit log, child session records ----
+    // The parent PIN hash and its settings live directly on this document
+    // (families/{familyId}) rather than a nested "settings" doc -- a fixed-name
+    // child under a document is a Firestore *collection* path, not a document,
+    // so it could never actually be read or written.
+    match /families/{familyId} {
+      allow read: if isParentOwner(familyId);
+      allow write: if false; // familyCode/parentUIDs/parentPinHash are set server-side only
+
+      match /parentData/{document=**} {
+        allow read, write: if isParentOwner(familyId);
+      }
+
+      match /audit/{docId} {
+        allow read, write: if isParentOwner(familyId);
+      }
+
+      // Written by the linkChild cloud function via the Admin SDK; never client-writable.
+      match /childSessions/{uid} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // ---- Users: parent profile + their children's data ----
+    match /users/{userId} {
+      allow read: if isParentOwner(userId) || hasChildSession(userId);
+      allow write: if isParentOwner(userId) && !('role' in request.resource.data);
+      // Lets the setParentRole/linkChild functions mirror role changes via an admin-flagged caller.
+      allow update: if request.auth != null && request.auth.token.admin == true;
+
+      match /children/{childId} {
+        allow read: if isParentOwner(userId) || allowedChild(userId, childId);
+        allow write: if isParentOwner(userId);
+
+        match /wishlist/{docId} {
+          allow read: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow create, update: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow delete: if isParentOwner(userId);
+        }
+
+        match /deeds/{docId} {
+          allow read: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow create: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow update, delete: if isParentOwner(userId);
+        }
+
+        // Santa's replies to a child's notes/deeds.
+        match /affirmations/{docId} {
+          allow read: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow create: if isParentOwner(userId) || allowedChild(userId, childId);
+          allow update, delete: if isParentOwner(userId);
+        }
+
+        match /{sub=**} {
+          allow read, write: if isParentOwner(userId);
+        }
+      }
+    }
+
+    // ---- Anonymous scratch space: a kid can try Santa before linking to a family ----
+    match /users/{anonUid}/anonSanta/{document=**} {
+      allow read, write: if request.auth != null &&
+        request.auth.token.firebase.sign_in_provider == 'anonymous' &&
+        request.auth.uid == anonUid;
+    }
+
+    // ---- Share links ----
+    // Tokens are minted and verified server-side (createShareLink / getSharedWishlist
+    // cloud functions) so a public visitor never touches Firestore directly with an
+    // unproven token. Only the owning parent can read/manage their own tokens here.
+    match /shareTokens/{shareId} {
+      allow read, write: if isParentOwner(resource.data.parentId) ||
+        (request.resource != null && isParentOwner(request.resource.data.parentId));
+    }
+  }
+}

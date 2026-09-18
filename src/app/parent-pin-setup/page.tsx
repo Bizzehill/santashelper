@@ -1,7 +1,7 @@
 'use client'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthWithClaims } from '@/hooks/useAuthWithClaims'
+import { useAuthWithClaims } from '@/lib/auth/useAuthWithClaims'
 import { useRequireRecentLogin } from '@/lib/requireRecentLogin'
 import { setParentPin } from '@/lib/functions'
 import { useParentSession } from '@/hooks/useParentSession'
