@@ -28,8 +28,8 @@ export default function ParentPinSetupPage() {
   }, [pin, confirm])
 
   useEffect(() => {
-    if (!loading && user && role !== 'parent') {
-      // Non-parent shouldn’t be here; send to gate
+    if (!loading && (!user || role !== 'parent')) {
+      // Not signed in, or not a parent -- shouldn't be here; send to the gate.
       router.replace('/parent-gate')
     }
   }, [loading, user, role, router])
