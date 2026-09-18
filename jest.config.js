@@ -2,8 +2,9 @@
 module.exports = {
   testEnvironment: 'jsdom',
   testMatch: ['**/tests/**/*.test.ts', '**/tests/**/*.test.tsx'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
   transform: {
-    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: { esModuleInterop: true } }],
+    '^.+\\.(ts|tsx)$': ['ts-jest', { tsconfig: { esModuleInterop: true, jsx: 'react-jsx' } }],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {

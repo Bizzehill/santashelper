@@ -1,7 +1,6 @@
 // @ts-nocheck
-import { act } from 'react-dom/test-utils'
 import { createRoot } from 'react-dom/client'
-import React, { useEffect } from 'react'
+import React, { act, useEffect } from 'react'
 import { useParentSession } from '@/hooks/useParentSession'
 
 function Probe({ onValue }: { onValue: (v:any)=>void }) {
