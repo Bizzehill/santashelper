@@ -1,8 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import * as admin from 'firebase-admin'
+import { getApps, initializeApp } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 
-if (!admin.apps.length) admin.initializeApp()
+if (!getApps().length) initializeApp()
 
 function genFamilyCode(length = 6) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // avoid ambiguous chars
@@ -62,11 +63,11 @@ export const createFamilyOnSignup = onCall(async (request) => {
 
   // Ensure auth custom claims include role=parent
   try {
-    const rec = await admin.auth().getUser(uid)
+    const rec = await getAuth().getUser(uid)
     const existing = (rec.customClaims || {}) as Record<string, unknown>
     if (existing['role'] !== 'parent') {
-      await admin.auth().setCustomUserClaims(uid, { ...existing, role: 'parent' })
-      await admin.auth().revokeRefreshTokens(uid)
+      await getAuth().setCustomUserClaims(uid, { ...existing, role: 'parent' })
+      await getAuth().revokeRefreshTokens(uid)
     }
   } catch (e) {
     // Non-fatal: log and continue

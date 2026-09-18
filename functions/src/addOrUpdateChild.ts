@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import * as admin from 'firebase-admin'
+import { getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as bcrypt from 'bcryptjs'
 
-if (!admin.apps.length) admin.initializeApp()
+if (!getApps().length) initializeApp()
 
 export const addOrUpdateChild = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')

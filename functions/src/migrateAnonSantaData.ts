@@ -1,7 +1,7 @@
-import * as admin from 'firebase-admin'
+import { getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 
-if (!admin.apps.length) admin.initializeApp()
+if (!getApps().length) initializeApp()
 
 // Migrates a kid's "try it before you link" scratch data into their real,
 // parent-visible child record once they successfully link a family.

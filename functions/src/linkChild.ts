@@ -1,10 +1,11 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import * as admin from 'firebase-admin'
+import { getApps, initializeApp } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as bcrypt from 'bcryptjs'
 import { migrateAnonSantaData } from './migrateAnonSantaData'
 
-if (!admin.apps.length) admin.initializeApp()
+if (!getApps().length) initializeApp()
 
 export const linkChild = onCall(async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required')
@@ -61,11 +62,11 @@ export const linkChild = onCall(async (request) => {
   await userRef.set({ role: 'child_linked', familyId, childId, roleUpdatedAt: FieldValue.serverTimestamp() }, { merge: true })
   // Optionally set auth custom claims (kept minimal; role can be mirrored by server-only logic)
   try {
-    const rec = await admin.auth().getUser(callerUid)
+    const rec = await getAuth().getUser(callerUid)
     const claims = { ...(rec.customClaims || {}) } as Record<string, unknown>
     if (claims['role'] !== 'child_linked') {
-      await admin.auth().setCustomUserClaims(callerUid, { ...claims, role: 'child_linked' })
-      await admin.auth().revokeRefreshTokens(callerUid)
+      await getAuth().setCustomUserClaims(callerUid, { ...claims, role: 'child_linked' })
+      await getAuth().revokeRefreshTokens(callerUid)
     }
   } catch (e) {
     console.error('linkChild: set claims failed', e)

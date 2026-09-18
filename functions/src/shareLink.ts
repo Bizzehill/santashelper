@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import * as admin from 'firebase-admin'
+import { getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import * as crypto from 'crypto'
 
-if (!admin.apps.length) admin.initializeApp()
+if (!getApps().length) initializeApp()
 
 function shareDocId(parentId: string, childId: string) {
   return `${parentId}_${childId}`

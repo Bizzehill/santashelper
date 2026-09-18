@@ -1,10 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https'
-import * as admin from 'firebase-admin'
-import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore'
-type FirestoreTransaction = admin.firestore.Transaction
+import { getApps, initializeApp } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
+import { getFirestore, FieldValue, Timestamp, Transaction } from 'firebase-admin/firestore'
 import * as bcrypt from 'bcryptjs'
 
-if (!admin.apps.length) admin.initializeApp()
+type FirestoreTransaction = Transaction
+
+if (!getApps().length) initializeApp()
 
 // Note: parent PINs and child PINs are stored using bcrypt hashes in Firestore settings and compared with bcrypt.
 
@@ -214,10 +216,10 @@ export const setParentRole = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Parameter "uid" is required')
   }
   try {
-    const userRecord = await admin.auth().getUser(uid)
+    const userRecord = await getAuth().getUser(uid)
     const existing = (userRecord.customClaims || {}) as Record<string, unknown>
     // Set role=parent, preserving any other custom claims
-    await admin.auth().setCustomUserClaims(uid, { ...existing, role: 'parent' })
+    await getAuth().setCustomUserClaims(uid, { ...existing, role: 'parent' })
     // Mirror into Firestore user doc; clients cannot write role directly (enforced in rules)
     await getFirestore().collection('users').doc(uid).set(
       {
@@ -227,7 +229,7 @@ export const setParentRole = onCall(async (request) => {
       { merge: true }
     )
     // Force clients to refresh token to receive new claims
-    await admin.auth().revokeRefreshTokens(uid)
+    await getAuth().revokeRefreshTokens(uid)
     return { ok: true }
   } catch (e: any) {
     console.error('setParentRole error', e)
